@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  video-h264-replay:
+    build:
+      context: https://github.com/chalmers-revere/opendlv-video-h264-replay.git#v0.0.1
+      dockerfile: Dockerfile.amd64
+    network_mode: "host"
+    ipc: "host"
+    volumes:
+      - ./task1:/opt/recordings
+      - /tmp:/tmp
+    environment:
+      - DISPLAY=${DISPLAY}
+    command: "--cid=111 --name=img.argb /opt/recordings/2020-03-24_131923-video-all.rec"
