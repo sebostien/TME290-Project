@@ -98,39 +98,53 @@ while True:
 
     ############################################################################
     # TODO: Add some image processing logic here.
-
+    cv2.rectangle(img, (512, 600), (768, HEIGHT), (0,0,0), -1)
 
     # TODO: Do something with the frame.
     hsv = cv2.cvtColor ( img , cv2.COLOR_BGR2HSV )
-    
+    blackMask = np.zeros_like(img)
+    blackMask[0:HEIGHT,0:WIDTH] = 1
+    # blackMask[0:HEIGHT / 2, 0:WIDTH] = 0
+    # img *= blackMask
+        
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
     # Blue
-    blueHsvLow = (110 , 50 , 50)
+    blueHsvLow = (100 , 50 , 50)
     blueHsvHi = (130 , 255 , 255)
-    blueCones =     cv2.inRange ( hsv , blueHsvLow , blueHsvHi )
+    blueCones = cv2.inRange ( hsv , blueHsvLow , blueHsvHi )
 
     # Yellow
-    yellowHsvLow2 = (10 , 50 , 50) 
-    yellowHsvHi2 = (40 , 255 , 255)
+    yellowHsvLow2 = (15, 50 , 50) 
+    yellowHsvHi2 = (35 , 255 , 255)
     yellowCones  = cv2.inRange ( hsv , yellowHsvLow2 , yellowHsvHi2)
 
     # # Combine show
-    blueCones = yellowCones
+    # blueCones = yellowCones
+
+    # Remove top half
+    cv2.rectangle(blueCones, (0, 0), (WIDTH, HEIGHT // 2), (0,0,0), -1)
+
+    # Remove car
+    # cv2.rectangle(blueCones, (WIDTH * 0.4, HEIGHT * 0.9), (WIDTH * 0.6, HEIGHT), (0,0,0), -1)
+
+
     cv2.imshow("blue", blueCones)
-    # # cv2.rectangle(img,(384,0),(510,128),(0,255,0),3)
-    # cv2.rectangle(img, (0, 0), (WIDTH, HEIGHT / 2), (0,255,0))
-    # cv2.rectangle(blueCones, (0, 0), (WIDTH, HEIGHT / 2), (0,255,0))
 
     # Dilate/Erode
-    kernel = np.ones((4, 4), np.uint8)
-    dilate = cv2.dilate ( blueCones , kernel , iterations=3)
-    cv2.imshow("Dilate", dilate)
-
+    kernel = np.ones((2, 2), np.uint8)
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
     # cv2.imshow ( " Erode " , erode )
+    dilate = cv2.dilate ( blueCones , kernel , iterations=10)
+    # cv2.imshow("Dilate", dilate)
+    blur = cv2.GaussianBlur(dilate, (11,11), 0) 
+    # cv2.imshow("Blur", blur)
+
 
     # Canny edge detection
-    canny = cv2.Canny ( dilate, 30 , 90 , 3)
+    edges = 30
+    threashold1 = 90
+    threashold2 = 3
+    canny = cv2.Canny ( dilate, edges, threashold1, threashold2)
     # cv2.imshow ( " Canny edges " , canny )
 
     # RETR_EXTERNAL 
@@ -139,14 +153,13 @@ while True:
     # cv2.imshow("Counturs" , canny )
     for contour in contours:
         peri = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.07 * peri, True)
-        # if len(approx) < 10: # Number of corners?
         if peri > 100 and peri < 500:
-            [a, b, w, h] = cv2.boundingRect(contour)
-            cv2.rectangle(img, (a,b), (a+w,b+h), (0, 0, 255))
-            # cv2.drawContours(img, contour, -1, (0, 255, 0), 3)
-    #     approx = cv2.approxPolyDP()
-    #     cv2.rectangle(img, (50, 50), (100, 100), (0,0,255), 2)
+            area = cv2.contourArea(contour)
+            if area > 500:
+                [a, b, w, h] = cv2.boundingRect(contour)
+                if w < h * 1.1: # Should be vertical rectangle
+                    # if h < 3 * w: 
+                    cv2.rectangle(img, (a,b), (a+w,b+h), (0, 0, 255))
     
     # Invert colors
     # img = cv2.bitwise_not(img)
