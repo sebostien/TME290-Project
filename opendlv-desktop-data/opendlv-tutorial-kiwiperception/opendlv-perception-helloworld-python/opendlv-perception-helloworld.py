@@ -28,6 +28,50 @@ import OD4Session
 import opendlv_standard_message_set_v0_9_10_pb2
 
 ################################################################################
+def comply_with_iso(pos):
+    x = pos["x"]
+    y = pos["y"]
+    a = [
+        720 - y, 
+        (x - 1280 // 2) * -1
+    ]
+    return a
+
+################################################################################
+def get_cone_positions(img):
+
+    # Dilate/Erode
+    kernel = np.ones((2, 2), np.uint8)
+
+    # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
+    dilate = cv2.dilate (img, kernel , iterations=10)
+    blur = cv2.GaussianBlur(dilate, (11,11), 0) 
+    cv2.imshow ( " Erode " , blur)
+
+    # Canny edge detection
+    edges = 30
+    threashold1 = 90
+    threashold2 = 3
+    canny = cv2.Canny (blur, edges, threashold1, threashold2)
+
+    # RETR_EXTERNAL 
+    # CHAIN_APPROX_SIMPLE
+    contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    # cv2.imshow("Counturs" , canny )
+    cones = []
+    for contour in contours:
+        peri = cv2.arcLength(contour, True)
+        if peri > 100 and peri < 500:
+            area = cv2.contourArea(contour)
+            if area > 500:
+                [x, y, w, h] = cv2.boundingRect(contour)
+                if w < h * 1.1: # Should be vertical rectangle
+                    # if h < 3 * w: 
+                    cones.append({"x": x + w / 2, "y": y + h / 2, "area": w * h})
+                    cv2.rectangle(img, (x,y), (x+w,y+h), (0, 0, 255))
+    return cones
+
+################################################################################
 # This dictionary contains all distance values to be filled by function onDistance(...).
 distances = { "front": 0.0, "left": 0.0, "right": 0.0, "rear": 0.0 };
 
@@ -98,7 +142,6 @@ while True:
 
     ############################################################################
     # TODO: Add some image processing logic here.
-    cv2.rectangle(img, (512, 600), (768, HEIGHT), (0,0,0), -1)
 
     # TODO: Do something with the frame.
     hsv = cv2.cvtColor ( img , cv2.COLOR_BGR2HSV )
@@ -118,54 +161,25 @@ while True:
     yellowHsvHi2 = (35 , 255 , 255)
     yellowCones  = cv2.inRange ( hsv , yellowHsvLow2 , yellowHsvHi2)
 
-    # # Combine show
-    # blueCones = yellowCones
-
     # Remove top half
+    cv2.rectangle(img, (512, 600), (768, HEIGHT), (0,0,0), -1)
+    # Remove car
     cv2.rectangle(blueCones, (0, 0), (WIDTH, HEIGHT // 2), (0,0,0), -1)
 
-    # Remove car
-    # cv2.rectangle(blueCones, (WIDTH * 0.4, HEIGHT * 0.9), (WIDTH * 0.6, HEIGHT), (0,0,0), -1)
-
-
-    cv2.imshow("blue", blueCones)
-
-    # Dilate/Erode
-    kernel = np.ones((2, 2), np.uint8)
-    # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    # cv2.imshow ( " Erode " , erode )
-    dilate = cv2.dilate ( blueCones , kernel , iterations=10)
-    # cv2.imshow("Dilate", dilate)
-    blur = cv2.GaussianBlur(dilate, (11,11), 0) 
-    # cv2.imshow("Blur", blur)
-
-
-    # Canny edge detection
-    edges = 30
-    threashold1 = 90
-    threashold2 = 3
-    canny = cv2.Canny ( dilate, edges, threashold1, threashold2)
-    # cv2.imshow ( " Canny edges " , canny )
-
-    # RETR_EXTERNAL 
-    # CHAIN_APPROX_SIMPLE
-    contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    # cv2.imshow("Counturs" , canny )
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        if peri > 100 and peri < 500:
-            area = cv2.contourArea(contour)
-            if area > 500:
-                [a, b, w, h] = cv2.boundingRect(contour)
-                if w < h * 1.1: # Should be vertical rectangle
-                    # if h < 3 * w: 
-                    cv2.rectangle(img, (a,b), (a+w,b+h), (0, 0, 255))
+    blue = get_cone_positions(blueCones)
+    yellow = get_cone_positions(yellowCones)
     
-    # Invert colors
-    # img = cv2.bitwise_not(img)
+    max_y_blue = WIDTH
+    min_y_yellow = 0
+    for p in blue:
+        max_y_blue = min(p["x"], max_y_blue)
+    for p in yellow:
+        min_y_yellow = max(p["y"], min_y_yellow)
 
-    # Draw a red rectangle
-    # cv2.rectangle(img, (50, 50), (100, 100), (0,0,255), 2)
+    cv2.rectangle(img, (int(min_y_yellow), 0), (int(max_y_blue), HEIGHT), (255, 255, 0))
+    x = (int(min_y_yellow) + int(max_y_blue)) // 2
+    cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
+    goal_pos = comply_with_iso({"x": x, "y": 0})
 
     # TODO: Disable the following two lines before running on Kiwi:
     cv2.imshow("image", img)
@@ -181,24 +195,28 @@ while True:
     ############################################################################
     # Example for creating and sending a message to other microservices; can
     # be removed when not needed.
-    angleReading = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_AngleReading()
-    angleReading.angle = 123.45
+    # angleReading = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_AngleReading()
+    # angleReading.angle = 123.45
 
     # 1038 is the message ID for opendlv.proxy.AngleReading
-    session.send(1038, angleReading.SerializeToString());
+    # session.send(1038, angleReading.SerializeToString());
 
     ############################################################################
     # Steering and acceleration/decelration.
     #
     # Uncomment the following lines to steer; range: +38deg (left) .. -38deg (right).
     # Value groundSteeringRequest.groundSteering must be given in radians (DEG/180. * PI).
-    #groundSteeringRequest = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
-    #groundSteeringRequest.groundSteering = 0
-    #session.send(1090, groundSteeringRequest.SerializeToString());
+    # groundSteeringRequest = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
+    # In range [-1, 1] 
+    # steer_01 = goal_pos.y / (WIDTH // 2)
+    # steer = steer_01 * 38
+    # groundSteeringRequest.groundSteering = 0
+    # session.send(1090, groundSteeringRequest.SerializeToString())
 
     # Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
     # Be careful!
-    #pedalPositionRequest = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
-    #pedalPositionRequest.position = 0
-    #session.send(1086, pedalPositionRequest.SerializeToString());
+    # pedalPositionRequest = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
+    # pedalPositionRequest.position = 0.01
+    # session.send(1086, pedalPositionRequest.SerializeToString());
+
 
