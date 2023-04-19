@@ -27,6 +27,9 @@ import OD4Session
 # Import the OpenDLV Standard Message Set.
 import opendlv_standard_message_set_v0_9_10_pb2
 
+prev_x = 1280/2 
+curr_x = 1280/2 #Starting value for direction
+
 ################################################################################
 def comply_with_iso(pos):
     x = pos["x"]
@@ -38,7 +41,7 @@ def comply_with_iso(pos):
     return a
 
 ################################################################################
-def get_cone_positions(img):
+def get_cone_positions(img, outImg):
 
     # Dilate/Erode
     kernel = np.ones((2, 2), np.uint8)
@@ -46,7 +49,7 @@ def get_cone_positions(img):
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
     dilate = cv2.dilate (img, kernel , iterations=10)
     blur = cv2.GaussianBlur(dilate, (11,11), 0) 
-    cv2.imshow ( " Erode " , blur)
+    #cv2.imshow ( " Erode " , blur)
 
     # Canny edge detection
     edges = 30
@@ -57,7 +60,7 @@ def get_cone_positions(img):
     # RETR_EXTERNAL 
     # CHAIN_APPROX_SIMPLE
     contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    # cv2.imshow("Counturs" , canny )
+    cv2.imshow("Counturs" , canny )
     cones = []
     for contour in contours:
         peri = cv2.arcLength(contour, True)
@@ -68,7 +71,7 @@ def get_cone_positions(img):
                 if w < h * 1.1: # Should be vertical rectangle
                     # if h < 3 * w: 
                     cones.append({"x": x + w / 2, "y": y + h / 2, "area": w * h})
-                    cv2.rectangle(img, (x,y), (x+w,y+h), (0, 0, 255))
+                    cv2.rectangle(outImg, (x,y), (x+w,y+h), (0, 0, 255))
     return cones
 
 ################################################################################
@@ -145,11 +148,12 @@ while True:
 
     # TODO: Do something with the frame.
     hsv = cv2.cvtColor ( img , cv2.COLOR_BGR2HSV )
-    blackMask = np.zeros_like(img)
-    blackMask[0:HEIGHT,0:WIDTH] = 1
-    # blackMask[0:HEIGHT / 2, 0:WIDTH] = 0
-    # img *= blackMask
-        
+    
+    # Remove car
+    cv2.rectangle(hsv, (512, 600), (768, HEIGHT), (0,0,0), -1)
+    # Remove top half
+    cv2.rectangle(hsv, (0, 0), (WIDTH, HEIGHT // 2), (0,0,0), -1)
+
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
     # Blue
     blueHsvLow = (100 , 50 , 50)
@@ -157,27 +161,24 @@ while True:
     blueCones = cv2.inRange ( hsv , blueHsvLow , blueHsvHi )
 
     # Yellow
-    yellowHsvLow2 = (15, 50 , 50) 
+    yellowHsvLow2 = (15, 50 , 50)
     yellowHsvHi2 = (35 , 255 , 255)
     yellowCones  = cv2.inRange ( hsv , yellowHsvLow2 , yellowHsvHi2)
 
-    # Remove top half
-    cv2.rectangle(img, (512, 600), (768, HEIGHT), (0,0,0), -1)
-    # Remove car
-    cv2.rectangle(blueCones, (0, 0), (WIDTH, HEIGHT // 2), (0,0,0), -1)
+    blue = get_cone_positions(blueCones, img)
+    yellow = get_cone_positions(yellowCones, img)
 
-    blue = get_cone_positions(blueCones)
-    yellow = get_cone_positions(yellowCones)
-    
     max_y_blue = WIDTH
     min_y_yellow = 0
     for p in blue:
         max_y_blue = min(p["x"], max_y_blue)
     for p in yellow:
-        min_y_yellow = max(p["y"], min_y_yellow)
+        min_y_yellow = max(p["x"], min_y_yellow)
 
-    cv2.rectangle(img, (int(min_y_yellow), 0), (int(max_y_blue), HEIGHT), (255, 255, 0))
-    x = (int(min_y_yellow) + int(max_y_blue)) // 2
+    cv2.rectangle(img, (int(min_y_yellow), 250), (int(max_y_blue), HEIGHT-100), (255, 255, 0))
+    prev_x = int(curr_x)
+    curr_x = (int(min_y_yellow) + int(max_y_blue)) // 2
+    x = prev_x + int(((curr_x - prev_x) * 0.6)) #Some sort of tröghet, can be tuned for sure
     cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
     goal_pos = comply_with_iso({"x": x, "y": 0})
 
