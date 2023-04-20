@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+
 # Copyright (C) 2018 Christian Berger
 #
 # This program is free software; you can redistribute it and/or
@@ -41,26 +42,28 @@ def comply_with_iso(pos):
     return a
 
 ################################################################################
-def get_cone_positions(img, outImg):
+def get_cone_positions(img, outImg, rectColor):
 
     # Dilate/Erode
-    kernel = np.ones((2, 2), np.uint8)
+    kernel22 = np.ones((2, 2), np.uint8)
+    kernel44 = np.ones((4,4), np.uint8)
 
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    dilate = cv2.dilate (img, kernel , iterations=10)
-    blur = cv2.GaussianBlur(dilate, (11,11), 0) 
-    #cv2.imshow ( " Erode " , blur)
+    dilate = cv2.dilate (img, kernel44, (-1,-1), iterations=5)
+    erode = cv2.erode (dilate, kernel22, (-1,0), iterations=10)
+    #blur = cv2.GaussianBlur(dilate, (11,11), 0)
+    cv2.imshow ( " Erode " , erode)
 
     # Canny edge detection
     edges = 30
     threashold1 = 90
     threashold2 = 3
-    canny = cv2.Canny (blur, edges, threashold1, threashold2)
+    canny = cv2.Canny (erode, edges, threashold1, threashold2)
 
     # RETR_EXTERNAL 
     # CHAIN_APPROX_SIMPLE
     contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    cv2.imshow("Counturs" , canny )
+    #cv2.imshow("Counturs" , canny )
     cones = []
     for contour in contours:
         peri = cv2.arcLength(contour, True)
@@ -71,8 +74,45 @@ def get_cone_positions(img, outImg):
                 if w < h * 1.1: # Should be vertical rectangle
                     # if h < 3 * w: 
                     cones.append({"x": x + w / 2, "y": y + h / 2, "area": w * h})
-                    cv2.rectangle(outImg, (x,y), (x+w,y+h), (0, 0, 255))
+                    cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
     return cones
+
+
+def get_paper_positions(img, outImg, rectColor):
+
+    # Dilate/Erode
+    kernel22 = np.ones((2, 2), np.uint8)
+    kernel44 = np.ones((4,4), np.uint8)
+
+    # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
+    dilate = cv2.dilate (img, kernel44, (-1,-1), iterations=10)
+    erode = cv2.erode (dilate, kernel22, (-1,0), iterations=10)
+    #blur = cv2.GaussianBlur(dilate, (11,11), 0)
+    cv2.imshow ( " Erode " , erode)
+
+    # Canny edge detection
+    edges = 30
+    threashold1 = 90
+    threashold2 = 3
+    canny = cv2.Canny (erode, edges, threashold1, threashold2)
+
+    # RETR_EXTERNAL 
+    # CHAIN_APPROX_SIMPLE
+    contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    #cv2.imshow("Counturs" , canny )
+    paper = {"area":0, "x":400, "y":360} #Maybe it will drive in a circle and look for a paper???
+    for contour in contours:
+        peri = cv2.arcLength(contour, True)
+        if peri > 100 and peri < 1000: #Very much a guess at size of paper
+            area = cv2.contourArea(contour)
+            if area > 500: #Also a guess, should be tweaked
+                [x, y, w, h] = cv2.boundingRect(contour)
+                if w < h * 1.1: # Should be vertical rectangle
+                    # if h < 3 * w: 
+                    if area > paper["area"] :
+                        paper = {"area":area, "x":x+w/2, "y":y+h/2}
+                        cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
+    return paper
 
 ################################################################################
 # This dictionary contains all distance values to be filled by function onDistance(...).
@@ -155,18 +195,25 @@ while True:
     cv2.rectangle(hsv, (0, 0), (WIDTH, HEIGHT // 2), (0,0,0), -1)
 
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
+    # Blue paper
+    paperHsvLow = (100, 50, 50)
+    paperHsvHi = (130 , 255 , 255)
+    bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
+
     # Blue
     blueHsvLow = (100 , 50 , 50)
     blueHsvHi = (130 , 255 , 255)
     blueCones = cv2.inRange ( hsv , blueHsvLow , blueHsvHi )
+    #cv2.imshow("Blue Cones", blueCones)
 
     # Yellow
     yellowHsvLow2 = (15, 50 , 50)
     yellowHsvHi2 = (35 , 255 , 255)
     yellowCones  = cv2.inRange ( hsv , yellowHsvLow2 , yellowHsvHi2)
 
-    blue = get_cone_positions(blueCones, img)
-    yellow = get_cone_positions(yellowCones, img)
+    yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
+    blue = get_cone_positions(blueCones, img, (0, 0, 255))
+    paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
 
     max_y_blue = WIDTH
     min_y_yellow = 0
