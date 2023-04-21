@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 # Copyright (C) 2018 Christian Berger
 #
 # This program is free software; you can redistribute it and/or
@@ -19,111 +18,132 @@
 
 # sysv_ipc is needed to access the shared memory where the camera image is present.
 import sysv_ipc
+
 # numpy and cv2 are needed to access, modify, or display the pixels
-import numpy
 import numpy as np
 import cv2
+
 # OD4Session is needed to send and receive messages
 import OD4Session
+
 # Import the OpenDLV Standard Message Set.
 import opendlv_standard_message_set_v0_9_10_pb2
 
-prev_x = 1280/2 
-curr_x = 1280/2 #Starting value for direction
+from util import Vec2, Region
 
 ################################################################################
-def comply_with_iso(pos):
-    x = pos["x"]
-    y = pos["y"]
-    a = [
-        720 - y, 
-        (x - 1280 // 2) * -1
-    ]
-    return a
+# Options
+RUNNING_ON_KIWI = False
 
 ################################################################################
-def get_cone_positions(img, outImg, rectColor):
+# Constants
+KIWI_OPTIONS = {
+    "width": 640,
+    "height": 480,
+    "channels": 3,
+    "cid": 140,
+    "camera_name": "/tmp/img.bgr",
+}
+REPLAY_OPTIONS = {
+    "width": 1280,
+    "height": 720,
+    "channels": 4,
+    "cid": 111,
+    "camera_name": "/tmp/img.argb",
+}
+OPTIONS = KIWI_OPTIONS if RUNNING_ON_KIWI else REPLAY_OPTIONS
+WIDTH : int = OPTIONS["width"]
+HEIGHT : int = OPTIONS["height"]
 
+# Default target point in middle of image
+prev_x = WIDTH // 2
+
+
+################################################################################
+def comply_with_iso(pos: Vec2) -> Vec2:
+    return Vec2(HEIGHT - pos.y, -pos.x + WIDTH // 2)
+
+
+################################################################################
+def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) -> list[Region]:
     # Dilate/Erode
     kernel22 = np.ones((2, 2), np.uint8)
-    kernel44 = np.ones((4,4), np.uint8)
+    kernel44 = np.ones((4, 4), np.uint8)
 
-    # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    dilate = cv2.dilate (img, kernel44, (-1,-1), iterations=5)
-    erode = cv2.erode (dilate, kernel22, (-1,0), iterations=10)
-    #blur = cv2.GaussianBlur(dilate, (11,11), 0)
-    cv2.imshow ( " Erode " , erode)
+    dilate = cv2.dilate(img, kernel44, (-1, -1), iterations=7)
+    erode = cv2.erode(dilate, kernel22, (-1, 0), iterations=7)
+    cv2.imshow(" Erode ", erode)
 
     # Canny edge detection
     edges = 30
     threashold1 = 90
     threashold2 = 3
-    canny = cv2.Canny (erode, edges, threashold1, threashold2)
+    canny = cv2.Canny(erode, edges, threashold1, threashold2)
 
-    # RETR_EXTERNAL 
+    # RETR_EXTERNAL
     # CHAIN_APPROX_SIMPLE
-    contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    #cv2.imshow("Counturs" , canny )
-    cones = []
+    contours, _hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    # cv2.imshow("Counturs" , canny )
+
+    cones: list[Region] = []
     for contour in contours:
         peri = cv2.arcLength(contour, True)
-        if peri > 100 and peri < 500:
+        if 100 < peri < 500:
             area = cv2.contourArea(contour)
-            if area > 500:
-                [x, y, w, h] = cv2.boundingRect(contour)
-                if w < h * 1.1: # Should be vertical rectangle
-                    # if h < 3 * w: 
-                    cones.append({"x": x + w / 2, "y": y + h / 2, "area": w * h})
-                    cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
+            [x, y, w, h] = cv2.boundingRect(contour)
+            cones.append(Region(x + w / 2, y + h / 2, area))
+            cv2.rectangle(outImg, (x, y), (x + w, y + h), rectColor)
     return cones
 
 
-def get_paper_positions(img, outImg, rectColor):
-
+def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) -> Region:
     # Dilate/Erode
     kernel22 = np.ones((2, 2), np.uint8)
-    kernel44 = np.ones((4,4), np.uint8)
+    kernel44 = np.ones((4, 4), np.uint8)
 
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    dilate = cv2.dilate (img, kernel44, (-1,-1), iterations=10)
-    erode = cv2.erode (dilate, kernel22, (-1,0), iterations=10)
-    #blur = cv2.GaussianBlur(dilate, (11,11), 0)
-    cv2.imshow ( " Erode " , erode)
+    dilate = cv2.dilate(img, kernel44, (-1, -1), iterations=10)
+    erode = cv2.erode(dilate, kernel22, (-1, 0), iterations=10)
+    # blur = cv2.GaussianBlur(dilate, (11,11), 0)
+    cv2.imshow(" Erode ", erode)
 
     # Canny edge detection
     edges = 30
     threashold1 = 90
     threashold2 = 3
-    canny = cv2.Canny (erode, edges, threashold1, threashold2)
+    canny = cv2.Canny(erode, edges, threashold1, threashold2)
 
-    # RETR_EXTERNAL 
-    # CHAIN_APPROX_SIMPLE
     contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    #cv2.imshow("Counturs" , canny )
-    paper = {"area":0, "x":400, "y":360} #Maybe it will drive in a circle and look for a paper???
+
+    # Maybe it will drive in a circle and look for a paper???
+    paper: Region = Region(WIDTH * 1 / 4, HEIGHT / 2, 0)
     for contour in contours:
         peri = cv2.arcLength(contour, True)
-        if peri > 100 and peri < 1000: #Very much a guess at size of paper
+        if peri > 100 and peri < 1000:  # Very much a guess at size of paper
             area = cv2.contourArea(contour)
-            if area > 500: #Also a guess, should be tweaked
+            if area > 500:  # Also a guess, should be tweaked
                 [x, y, w, h] = cv2.boundingRect(contour)
-                if w < h * 1.1: # Should be vertical rectangle
-                    # if h < 3 * w: 
-                    if area > paper["area"] :
-                        paper = {"area":area, "x":x+w/2, "y":y+h/2}
-                        cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
+                # Find largest blue area
+                if area > paper.area:
+                    paper = Region(x + w / 2, y + h / 2, area)
+                    cv2.rectangle(outImg, (x, y), (x + w, y + h), rectColor)
     return paper
+
 
 ################################################################################
 # This dictionary contains all distance values to be filled by function onDistance(...).
-distances = { "front": 0.0, "left": 0.0, "right": 0.0, "rear": 0.0 };
+distances = {"front": 0.0, "left": 0.0, "right": 0.0, "rear": 0.0}
+
 
 ################################################################################
 # This callback is triggered whenever there is a new distance reading coming in.
 def onDistance(msg, senderStamp, timeStamps):
-    print ("Received distance; senderStamp= %s" % (str(senderStamp)))
-    print ("sent: %s, received: %s, sample time stamps: %s" % (str(timeStamps[0]), str(timeStamps[1]), str(timeStamps[2])))
-    print ("%s" % (msg))
+    print("Received distance; senderStamp= %s" % (str(senderStamp)))
+    print(
+        "sent: %s, received: %s, sample time stamps: %s"
+        % (str(timeStamps[0]), str(timeStamps[1]), str(timeStamps[2]))
+    )
+    print("%s" % (msg))
     if senderStamp == 0:
         distances["front"] = msg.distance
     if senderStamp == 1:
@@ -135,26 +155,30 @@ def onDistance(msg, senderStamp, timeStamps):
 
 
 # Create a session to send and receive messages from a running OD4Session;
-# Replay mode: CID = 253
-# Live mode: CID = 112
-# TODO: Change to CID 112 when this program is used on Kiwi.
-session = OD4Session.OD4Session(cid=111)
+# Replay mode: CID = 111
+# Live mode: CID = 140
+# Change to CID 140 when this program is used on Kiwi.
+session = OD4Session.OD4Session(cid=OPTIONS["cid"])
 # Register a handler for a message; the following example is listening
 # for messageID 1039 which represents opendlv.proxy.DistanceReading.
 # Cf. here: https://github.com/chalmers-revere/opendlv.standard-message-set/blob/master/opendlv.odvd#L113-L115
-messageIDDistanceReading = 1039
-session.registerMessageCallback(messageIDDistanceReading, onDistance, opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_DistanceReading)
+MESSAGE_ID_DISTANCE_READING = 1039
+session.registerMessageCallback(
+    MESSAGE_ID_DISTANCE_READING,
+    onDistance,
+    opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_DistanceReading,
+)
 # Connect to the network session.
 session.connect()
 
 ################################################################################
 # The following lines connect to the camera frame that resides in shared memory.
 # This name must match with the name used in the h264-decoder-viewer.yml file.
-name = "/tmp/img.argb"
+CAMERA_NAME = OPTIONS["camera_name"]
 # Obtain the keys for the shared memory and semaphores.
-keySharedMemory = sysv_ipc.ftok(name, 1, True)
-keySemMutex = sysv_ipc.ftok(name, 2, True)
-keySemCondition = sysv_ipc.ftok(name, 3, True)
+keySharedMemory = sysv_ipc.ftok(CAMERA_NAME, 1, True)
+keySemMutex = sysv_ipc.ftok(CAMERA_NAME, 2, True)
+keySemCondition = sysv_ipc.ftok(CAMERA_NAME, 3, True)
 # Instantiate the SharedMemory and Semaphore objects.
 shm = sysv_ipc.SharedMemory(keySharedMemory)
 mutex = sysv_ipc.Semaphore(keySemCondition)
@@ -165,7 +189,7 @@ cond = sysv_ipc.Semaphore(keySemCondition)
 while True:
     # Wait for next notification.
     cond.Z()
-    print ("Received new frame.")
+    print("Received new frame.")
 
     # Lock access to shared memory.
     mutex.acquire()
@@ -179,66 +203,63 @@ while True:
     mutex.release()
 
     # Turn buf into img array (1280 * 720 * 4 bytes (ARGB)) to be used with OpenCV.
-    HEIGHT = 720
-    WIDTH = 1280
-    img = numpy.frombuffer(buf, numpy.uint8).reshape(HEIGHT, WIDTH, 4)
+    img = np.frombuffer(buf, np.uint8).reshape(HEIGHT, WIDTH, 4)
 
     ############################################################################
-    # TODO: Add some image processing logic here.
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    # TODO: Do something with the frame.
-    hsv = cv2.cvtColor ( img , cv2.COLOR_BGR2HSV )
-    
     # Remove car
-    cv2.rectangle(hsv, (512, 600), (768, HEIGHT), (0,0,0), -1)
+    cv2.rectangle(hsv, (512, 600), (768, HEIGHT), (0, 0, 0), -1)
     # Remove top half
-    cv2.rectangle(hsv, (0, 0), (WIDTH, HEIGHT // 2), (0,0,0), -1)
+    cv2.rectangle(hsv, (0, 0), (WIDTH, HEIGHT // 2), (0, 0, 0), -1)
 
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
     # Blue paper
     paperHsvLow = (100, 50, 50)
-    paperHsvHi = (130 , 255 , 255)
-    bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
+    paperHsvHi = (130, 255, 255)
+    bluePaper = cv2.inRange(hsv, paperHsvLow, paperHsvHi)
 
     # Blue
-    blueHsvLow = (100 , 50 , 50)
-    blueHsvHi = (130 , 255 , 255)
-    blueCones = cv2.inRange ( hsv , blueHsvLow , blueHsvHi )
-    #cv2.imshow("Blue Cones", blueCones)
+    blueHsvLow = (100, 50, 50)
+    blueHsvHi = (130, 255, 255)
+    blueCones = cv2.inRange(hsv, blueHsvLow, blueHsvHi)
+    # cv2.imshow("Blue Cones", blueCones)
 
     # Yellow
-    yellowHsvLow2 = (15, 50 , 50)
-    yellowHsvHi2 = (35 , 255 , 255)
-    yellowCones  = cv2.inRange ( hsv , yellowHsvLow2 , yellowHsvHi2)
+    yellowHsvLow2 = (15, 50, 50)
+    yellowHsvHi2 = (35, 255, 255)
+    yellowCones = cv2.inRange(hsv, yellowHsvLow2, yellowHsvHi2)
 
     yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
     blue = get_cone_positions(blueCones, img, (0, 0, 255))
-    paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
+    paper = get_paper_positions(bluePaper, img, (255, 0, 0))
 
-    max_y_blue = WIDTH
-    min_y_yellow = 0
+    min_x_blue = float(WIDTH)
+    max_x_yellow = float(0)
     for p in blue:
-        max_y_blue = min(p["x"], max_y_blue)
+        min_x_blue = min(p.mid.x, min_x_blue)
     for p in yellow:
-        min_y_yellow = max(p["x"], min_y_yellow)
+        max_x_yellow = max(p.mid.x, max_x_yellow)
 
-    cv2.rectangle(img, (int(min_y_yellow), 250), (int(max_y_blue), HEIGHT-100), (255, 255, 0))
+    cv2.rectangle(img, (int(min_x_blue), 0), (int(max_x_yellow), HEIGHT), (255, 255, 0))
+    curr_x = (int(max_x_yellow) + int(min_x_blue)) // 2
+    x = prev_x + int(
+        ((curr_x - prev_x) * 0.6)
+    )  # Some sort of tröghet, can be tuned for sure
     prev_x = int(curr_x)
-    curr_x = (int(min_y_yellow) + int(max_y_blue)) // 2
-    x = prev_x + int(((curr_x - prev_x) * 0.6)) #Some sort of tröghet, can be tuned for sure
-    cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
-    goal_pos = comply_with_iso({"x": x, "y": 0})
+    goal_pos = comply_with_iso(Vec2(x, 0))  # TODO: Should not be 0?
 
-    # TODO: Disable the following two lines before running on Kiwi:
-    cv2.imshow("image", img)
-    cv2.waitKey(2)
+    if not RUNNING_ON_KIWI:
+        cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
+        cv2.imshow("image", img)
+        cv2.waitKey(2)
 
     ############################################################################
     # Example: Accessing the distance readings.
-    print ("Front = %s" % (str(distances["front"])))
-    print ("Left = %s" % (str(distances["left"])))
-    print ("Right = %s" % (str(distances["right"])))
-    print ("Rear = %s" % (str(distances["rear"])))
+    print("Front = %s" % (str(distances["front"])))
+    print("Left = %s" % (str(distances["left"])))
+    print("Right = %s" % (str(distances["right"])))
+    print("Rear = %s" % (str(distances["rear"])))
 
     ############################################################################
     # Example for creating and sending a message to other microservices; can
@@ -254,17 +275,20 @@ while True:
     #
     # Uncomment the following lines to steer; range: +38deg (left) .. -38deg (right).
     # Value groundSteeringRequest.groundSteering must be given in radians (DEG/180. * PI).
-    # groundSteeringRequest = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
-    # In range [-1, 1] 
-    # steer_01 = goal_pos.y / (WIDTH // 2)
-    # steer = steer_01 * 38
-    # groundSteeringRequest.groundSteering = 0
-    # session.send(1090, groundSteeringRequest.SerializeToString())
+    if RUNNING_ON_KIWI:
+        groundSteeringRequest = (
+            opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
+        )
+        # In range [-38 deg, 38 deg]
+        steer_deg = (goal_pos.y / (WIDTH // 2)) * 38
+        steer_rad = steer_deg / 180 * 3.141
+        groundSteeringRequest.groundSteering = steer_def
+        session.send(1090, groundSteeringRequest.SerializeToString())
 
-    # Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
-    # Be careful!
-    # pedalPositionRequest = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
-    # pedalPositionRequest.position = 0.01
-    # session.send(1086, pedalPositionRequest.SerializeToString());
-
-
+        # Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
+        # Be careful!
+        pedalPositionRequest = (
+            opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
+        )
+        pedalPositionRequest.position = 0.11
+        session.send(1086, pedalPositionRequest.SerializeToString())
