@@ -30,6 +30,10 @@ import OD4Session
 import opendlv_standard_message_set_v0_9_10_pb2
 
 from util import Vec2, Region
+prev_x = 1280/2 
+curr_x = 1280/2 #Starting value for direction
+HEIGHT = 480
+WIDTH = 640
 
 ################################################################################
 # Options
@@ -102,10 +106,10 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) -> Region:
     kernel44 = np.ones((4, 4), np.uint8)
 
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    dilate = cv2.dilate(img, kernel44, (-1, -1), iterations=10)
-    erode = cv2.erode(dilate, kernel22, (-1, 0), iterations=10)
-    # blur = cv2.GaussianBlur(dilate, (11,11), 0)
-    cv2.imshow(" Erode ", erode)
+    dilate = cv2.dilate (img, kernel44, (-1,-1), iterations=10)
+    erode = cv2.erode (dilate, kernel22, (-1,0), iterations=18)
+    #blur = cv2.GaussianBlur(dilate, (11,11), 0)
+    cv2.imshow ( " Erode " , erode)
 
     # Canny edge detection
     edges = 30
@@ -114,19 +118,17 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) -> Region:
     canny = cv2.Canny(erode, edges, threashold1, threashold2)
 
     contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-
-    # Maybe it will drive in a circle and look for a paper???
-    paper: Region = Region(WIDTH * 1 / 4, HEIGHT / 2, 0)
+    cv2.imshow("Counturs" , canny )
+    paper = {"area":0, "x":WIDTH/2, "y":HEIGHT} #Maybe it will drive in a circle and look for a paper???
     for contour in contours:
         peri = cv2.arcLength(contour, True)
-        if peri > 100 and peri < 1000:  # Very much a guess at size of paper
-            area = cv2.contourArea(contour)
-            if area > 500:  # Also a guess, should be tweaked
-                [x, y, w, h] = cv2.boundingRect(contour)
-                # Find largest blue area
-                if area > paper.area:
-                    paper = Region(x + w / 2, y + h / 2, area)
-                    cv2.rectangle(outImg, (x, y), (x + w, y + h), rectColor)
+        area = cv2.contourArea(contour)
+        print(area)
+        if area > 3000: #Also a guess, should be tweaked
+            [x, y, w, h] = cv2.boundingRect(contour)
+            if area > paper["area"] :
+                paper = {"area":area, "x":x+w/2, "y":y+h/2}
+                cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
     return paper
 
 
@@ -215,10 +217,10 @@ while True:
 
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
     # Blue paper
-    paperHsvLow = (100, 50, 50)
-    paperHsvHi = (130, 255, 255)
-    bluePaper = cv2.inRange(hsv, paperHsvLow, paperHsvHi)
-
+    paperHsvLow = (90, 50, 50)
+    paperHsvHi = (110 , 255 , 255)
+    bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
+    cv2.imshow("bluePaper", bluePaper)
     # Blue
     blueHsvLow = (100, 50, 50)
     blueHsvHi = (130, 255, 255)
@@ -230,24 +232,30 @@ while True:
     yellowHsvHi2 = (35, 255, 255)
     yellowCones = cv2.inRange(hsv, yellowHsvLow2, yellowHsvHi2)
 
-    yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
-    blue = get_cone_positions(blueCones, img, (0, 0, 255))
-    paper = get_paper_positions(bluePaper, img, (255, 0, 0))
+    #yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
+    #blue = get_cone_positions(blueCones, img, (0, 0, 255))
+    paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
+    print(paper)
 
-    min_x_blue = float(WIDTH)
-    max_x_yellow = float(0)
-    for p in blue:
-        min_x_blue = min(p.mid.x, min_x_blue)
-    for p in yellow:
-        max_x_yellow = max(p.mid.x, max_x_yellow)
+    #max_y_blue = WIDTH
+    #min_y_yellow = 0
+    #for p in blue:
+    #    max_y_blue = min(p["x"], max_y_blue)
+    #for p in yellow:
+    #    min_y_yellow = max(p["x"], min_y_yellow)
 
-    cv2.rectangle(img, (int(min_x_blue), 0), (int(max_x_yellow), HEIGHT), (255, 255, 0))
-    curr_x = (int(max_x_yellow) + int(min_x_blue)) // 2
-    x = prev_x + int(
-        ((curr_x - prev_x) * 0.6)
-    )  # Some sort of tröghet, can be tuned for sure
-    prev_x = int(curr_x)
-    goal_pos = comply_with_iso(Vec2(x, 0))  # TODO: Should not be 0?
+    #cv2.rectangle(img, (int(min_y_yellow), 250), (int(max_y_blue), HEIGHT-100), (255, 255, 0))
+    #prev_x = int(curr_x)
+    #curr_x = (int(min_y_yellow) + int(max_y_blue)) // 2
+    #x = prev_x + int(((curr_x - prev_x) * 0.6)) #Some sort of tröghet, can be tuned for sure
+    #cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
+    #goal_pos = comply_with_iso({"x": x, "y": 0}) #Cones
+    #paperMiddleX = paper["x"] + paper["w"] / 2
+    #paperMiddleY = paper["y"] + paper["h"] / 2
+    paperx = int(paper["x"])
+    papery = int(paper["y"])
+    cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
+    goal_pos = comply_with_iso({"x":paper["x"], "y":paper["y"]})
 
     if not RUNNING_ON_KIWI:
         cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
