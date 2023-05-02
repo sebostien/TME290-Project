@@ -130,7 +130,7 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
     canny = cv2.Canny(erode, edges, threashold1, threashold2)
 
     contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    cv2.imshow("Counturs" , canny )
+    #cv2.imshow("Counturs" , canny )
     paper = {"area":0, "x":WIDTH/2, "y":HEIGHT} #Maybe it will drive in a circle and look for a paper???
     for contour in contours:
         peri = cv2.arcLength(contour, True)
@@ -229,8 +229,8 @@ while True:
 
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
     # Blue paper
-    paperHsvLow = (90, 50, 50)
-    paperHsvHi = (110 , 255 , 255)
+    paperHsvLow = (90, 100, 50) #(100, 128, 61), (96, 148, 59) (97, 145, 66)
+    paperHsvHi = (110 , 200 , 150)
     bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
     cv2.imshow("bluePaper", bluePaper)
     # Blue
