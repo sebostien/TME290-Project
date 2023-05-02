@@ -29,15 +29,16 @@ import OD4Session
 # Import the OpenDLV Standard Message Set.
 import opendlv_standard_message_set_v0_9_10_pb2
 
-from util import Vec2, Region
+#from utils import Vec2, Region
 prev_x = 1280/2 
 curr_x = 1280/2 #Starting value for direction
-HEIGHT = 480
-WIDTH = 640
+#HEIGHT = 480
+#WIDTH = 640
 
 ################################################################################
 # Options
-RUNNING_ON_KIWI = False
+RUNNING_ON_KIWI = False #This is messy as hell
+REC_FROM_KIWI = True
 
 ################################################################################
 # Constants
@@ -55,21 +56,31 @@ REPLAY_OPTIONS = {
     "cid": 111,
     "camera_name": "/tmp/img.argb",
 }
-OPTIONS = KIWI_OPTIONS if RUNNING_ON_KIWI else REPLAY_OPTIONS
+REC_OPTIONS = {
+    "width": 640,
+    "height": 480,
+    "channels": 4,
+    "cid": 111,
+    "camera_name": "/tmp/img.argb",
+}
+OPTIONS = KIWI_OPTIONS if RUNNING_ON_KIWI else REPLAY_OPTIONS 
+OPTIONS = REC_OPTIONS if REC_FROM_KIWI else REPLAY_OPTIONS
 WIDTH : int = OPTIONS["width"]
 HEIGHT : int = OPTIONS["height"]
+CHANNELS : int = OPTIONS["channels"]
+CAMERA_NAME : str = OPTIONS["camera_name"]
 
 # Default target point in middle of image
 prev_x = WIDTH // 2
 
 
 ################################################################################
-def comply_with_iso(pos: Vec2) -> Vec2:
-    return Vec2(HEIGHT - pos.y, -pos.x + WIDTH // 2)
+def comply_with_iso(pos: tuple[int , int]) -> tuple:
+    return [HEIGHT - pos[0], -pos[0] + WIDTH // 2]
 
 
 ################################################################################
-def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) -> list[Region]:
+def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[Region]:
     # Dilate/Erode
     kernel22 = np.ones((2, 2), np.uint8)
     kernel44 = np.ones((4, 4), np.uint8)
@@ -89,18 +100,19 @@ def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) -> list[Reg
     contours, _hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     # cv2.imshow("Counturs" , canny )
 
-    cones: list[Region] = []
+    #cones: list[Region] = []
+    cones = []
     for contour in contours:
         peri = cv2.arcLength(contour, True)
         if 100 < peri < 500:
             area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
-            cones.append(Region(x + w / 2, y + h / 2, area))
+            cones.append(x + w / 2, y + h / 2, area)
             cv2.rectangle(outImg, (x, y), (x + w, y + h), rectColor)
     return cones
 
 
-def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) -> Region:
+def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Region:
     # Dilate/Erode
     kernel22 = np.ones((2, 2), np.uint8)
     kernel44 = np.ones((4, 4), np.uint8)
@@ -205,7 +217,7 @@ while True:
     mutex.release()
 
     # Turn buf into img array (1280 * 720 * 4 bytes (ARGB)) to be used with OpenCV.
-    img = np.frombuffer(buf, np.uint8).reshape(HEIGHT, WIDTH, 4)
+    img = np.frombuffer(buf, np.uint8).reshape(HEIGHT, WIDTH, CHANNELS)
 
     ############################################################################
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -255,10 +267,10 @@ while True:
     paperx = int(paper["x"])
     papery = int(paper["y"])
     cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
-    goal_pos = comply_with_iso({"x":paper["x"], "y":paper["y"]})
+    goal_pos = comply_with_iso([paperx, papery])
 
     if not RUNNING_ON_KIWI:
-        cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
+        #cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
         cv2.imshow("image", img)
         cv2.waitKey(2)
 
