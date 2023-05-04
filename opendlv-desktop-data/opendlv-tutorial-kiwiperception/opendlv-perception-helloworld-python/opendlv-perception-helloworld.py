@@ -37,11 +37,12 @@ curr_x = 1280/2 #Starting value for direction
 
 ################################################################################
 # Options
-RUNNING_ON_KIWI = False #This is messy as hell
-REC_FROM_KIWI = True
+RUNNING_ON_KIWI = True #This is messy as hell
+REC_FROM_KIWI = False
 
 STATE = 1 #1=looking for paper, 0=between cones, 2 = parking on paper
-STATE_TIME = 0
+FRAMES = 0
+FRAME_STATE2_ENTRY = 0
 
 ################################################################################
 # Constants
@@ -51,6 +52,12 @@ KIWI_OPTIONS = {
     "channels": 3,
     "cid": 140,
     "camera_name": "/tmp/img.bgr",
+    "blueLo": (90, 50, 50),
+    "blueHi": (110 , 255 , 255),
+    "blueConeLo": 0,
+    "blueConeHi": 0,
+    "yelConeLo": 0,
+    "yelConeHi": 0
 }
 REPLAY_OPTIONS = {
     "width": 1280,
@@ -58,6 +65,12 @@ REPLAY_OPTIONS = {
     "channels": 4,
     "cid": 111,
     "camera_name": "/tmp/img.argb",
+    "blueLo": (90, 100, 50),
+    "blueHi": (110 , 200 , 150),
+    "blueConeLo": 0,
+    "blueConeHi": 0,
+    "yelConeLo": 0,
+    "yelConeHi": 0
 }
 REC_OPTIONS = {
     "width": 640,
@@ -65,6 +78,12 @@ REC_OPTIONS = {
     "channels": 4,
     "cid": 111,
     "camera_name": "/tmp/img.argb",
+    "blueLo": (90, 100, 50),
+    "blueHi": (110 , 200 , 150),
+    "blueConeLo": 0,
+    "blueConeHi": 0,
+    "yelConeLo": 0,
+    "yelConeHi": 0
 }
 OPTIONS = KIWI_OPTIONS if RUNNING_ON_KIWI else REPLAY_OPTIONS 
 OPTIONS = REC_OPTIONS if REC_FROM_KIWI else OPTIONS
@@ -90,7 +109,7 @@ def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[
 
     dilate = cv2.dilate(img, kernel44, (-1, -1), iterations=7)
     erode = cv2.erode(dilate, kernel22, (-1, 0), iterations=7)
-    cv2.imshow(" Erode ", erode)
+    #cv2.imshow(" Erode ", erode)
 
     # Canny edge detection
     edges = 30
@@ -101,7 +120,7 @@ def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[
     # RETR_EXTERNAL
     # CHAIN_APPROX_SIMPLE
     contours, _hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    # cv2.imshow("Counturs" , canny )
+    #cv2.imshow("Counturs" , canny )
 
     #cones: list[Region] = []
     cones = []
@@ -121,10 +140,10 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
     kernel22 = np.ones((2, 2), np.uint8)
 
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    dilate = cv2.dilate (img, kernel22, (-1,-1), iterations=8)
-    erode = cv2.erode (dilate, kernel11, (-1,0), iterations=12)
+    dilate = cv2.dilate (img, kernel22, (-1,-1), iterations=10)
+    erode = cv2.erode (dilate, kernel11, (-1,0), iterations=15)
     #blur = cv2.GaussianBlur(dilate, (11,11), 0)
-    cv2.imshow ( "Dilate " , erode)
+    #cv2.imshow ( "Dilate " , erode)
 
     # Canny edge detection
     edges = 30
@@ -138,14 +157,16 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
     for contour in contours:
         peri = cv2.arcLength(contour, True)
         area = cv2.contourArea(contour)
-        print(area)
-        if area > 1500: #Also a guess, should be tweaked
+        #print(area)
+        if area > 1000: #Also a guess, should be tweaked
             [x, y, w, h] = cv2.boundingRect(contour)
             if area > paper["area"] :
                 paper = {"area":area, "x":x+w/2, "y":y+h/2}
                 cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
-                if (y > 0.8*HEIGHT) :
-                    return -1
+                if (y+h/2 > 0.8*HEIGHT) :
+                	STATE = 2
+                	FRAME_STATE2_ENTRY = FRAMES
+                	return -1
     return paper
 
 
@@ -157,12 +178,12 @@ distances = {"front": 0.0, "left": 0.0, "right": 0.0, "rear": 0.0}
 ################################################################################
 # This callback is triggered whenever there is a new distance reading coming in.
 def onDistance(msg, senderStamp, timeStamps):
-    print("Received distance; senderStamp= %s" % (str(senderStamp)))
-    print(
-        "sent: %s, received: %s, sample time stamps: %s"
-        % (str(timeStamps[0]), str(timeStamps[1]), str(timeStamps[2]))
-    )
-    print("%s" % (msg))
+  #  print("Received distance; senderStamp= %s" % (str(senderStamp)))
+    #print(
+    #    "sent: %s, received: %s, sample time stamps: %s"
+    #    % (str(timeStamps[0]), str(timeStamps[1]), str(timeStamps[2]))
+    #)
+    #print("%s" % (msg))
     if senderStamp == 0:
         distances["front"] = msg.distance
     if senderStamp == 1:
@@ -208,7 +229,8 @@ cond = sysv_ipc.Semaphore(keySemCondition)
 while True:
     # Wait for next notification.
     cond.Z()
-    print("Received new frame.")
+    #print("Received new frame.")
+    FRAMES += 1
 
     # Lock access to shared memory.
     mutex.acquire()
@@ -234,10 +256,10 @@ while True:
 
     # Note : H [0 ,180] , S [0 ,255] , V [0 , 255]
     # Blue paper
-    paperHsvLow = (90, 100, 50) #(100, 128, 61), (96, 148, 59) (97, 145, 66)
-    paperHsvHi = (110 , 200 , 150)
+    paperHsvLow = KIWI_OPTIONS["blueLo"] #(100, 128, 61), (96, 148, 59) (97, 145, 66)
+    paperHsvHi = KIWI_OPTIONS["blueHi"]
     bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
-    cv2.imshow("bluePaper", bluePaper)
+    #cv2.imshow("bluePaper", bluePaper)
     # Blue
     blueHsvLow = (100, 50, 50)
     blueHsvHi = (130, 255, 255)
@@ -252,9 +274,9 @@ while True:
     #yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
     #blue = get_cone_positions(blueCones, img, (0, 0, 255))
     paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
-    if (paper == -1 and STATE == 1) :
-        STATE = 2
-        STATE_TIME = datetime.datetime.now()
+    if (paper == -1) :
+    	STATE = 2
+    	FRAME_STATE2_ENTRY = FRAMES
     print(paper)
 
     #max_y_blue = WIDTH
@@ -279,9 +301,17 @@ while True:
         goal_pos = comply_with_iso([paperx, papery])
 
     if not RUNNING_ON_KIWI:
+    	pass
         #cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
-        cv2.imshow("image", img)
-        cv2.waitKey(2)
+    if (STATE == 1) : 
+    	cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (255, 0, 255), -1)
+    else : 
+    	cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (0, 0, 255), -1)
+    cv2.imshow("image", img)
+    print("STATE = ", STATE)
+    cv2.waitKey(1)
+    
+        
 
     ############################################################################
     # Example: Accessing the distance readings.
@@ -310,9 +340,9 @@ while True:
         )
         if (STATE == 1) : 
             # In range [-38 deg, 38 deg]
-            steer_deg = (goal_pos.y / (WIDTH // 2)) * 38
+            steer_deg = (goal_pos[1] / (WIDTH // 1)) * 38
             steer_rad = steer_deg / 180 * 3.141
-            groundSteeringRequest.groundSteering = steer_def
+            groundSteeringRequest.groundSteering = steer_rad
             session.send(1090, groundSteeringRequest.SerializeToString())
 
             # Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
@@ -320,8 +350,22 @@ while True:
             pedalPositionRequest = (
             opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
              )
-            pedalPositionRequest.position = 0.12
+            pedalPositionRequest.position = 0.11
             session.send(1086, pedalPositionRequest.SerializeToString())
         if (STATE == 2) :
-            pedalPositionRequest.position = 0
+            pedalPositionRequest = (
+                opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
+                )
+            pedalPositionRequest.position = 0.11
             session.send(1086, pedalPositionRequest.SerializeToString())
+            if (FRAME_STATE2_ENTRY + 1 < FRAMES) :
+            	STATE = 3
+            	FRAME_STATE2_ENTRY = FRAMES
+        if (STATE == 3) :
+            pedalPositionRequest = (
+                opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
+                )
+            pedalPositionRequest.position = 0
+            session.send(1086, pedalPositionRequest.SerializeToString())  
+            if (FRAME_STATE2_ENTRY + 25 < FRAMES) :
+            	STATE = 1
