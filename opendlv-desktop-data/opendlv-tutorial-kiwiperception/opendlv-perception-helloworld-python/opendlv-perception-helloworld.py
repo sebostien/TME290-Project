@@ -67,7 +67,7 @@ REC_OPTIONS = {
     "camera_name": "/tmp/img.argb",
 }
 OPTIONS = KIWI_OPTIONS if RUNNING_ON_KIWI else REPLAY_OPTIONS 
-OPTIONS = REC_OPTIONS if REC_FROM_KIWI else REPLAY_OPTIONS
+OPTIONS = REC_OPTIONS if REC_FROM_KIWI else OPTIONS
 WIDTH : int = OPTIONS["width"]
 HEIGHT : int = OPTIONS["height"]
 CHANNELS : int = OPTIONS["channels"]
@@ -272,10 +272,11 @@ while True:
     #goal_pos = comply_with_iso({"x": x, "y": 0}) #Cones
     #paperMiddleX = paper["x"] + paper["w"] / 2
     #paperMiddleY = paper["y"] + paper["h"] / 2
-    paperx = int(paper["x"])
-    papery = int(paper["y"])
-    cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
-    goal_pos = comply_with_iso([paperx, papery])
+    if (STATE == 1) : 
+        paperx = int(paper["x"])
+        papery = int(paper["y"])
+        cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
+        goal_pos = comply_with_iso([paperx, papery])
 
     if not RUNNING_ON_KIWI:
         #cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
