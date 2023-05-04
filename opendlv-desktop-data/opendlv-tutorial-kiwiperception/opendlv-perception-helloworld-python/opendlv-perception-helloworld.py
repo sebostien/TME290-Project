@@ -18,10 +18,10 @@
 
 # sysv_ipc is needed to access the shared memory where the camera image is present.
 import sysv_ipc
-
 # numpy and cv2 are needed to access, modify, or display the pixels
 import numpy as np
 import cv2
+import datetime
 
 # OD4Session is needed to send and receive messages
 import OD4Session
@@ -39,6 +39,9 @@ curr_x = 1280/2 #Starting value for direction
 # Options
 RUNNING_ON_KIWI = False #This is messy as hell
 REC_FROM_KIWI = True
+
+STATE = 1 #1=looking for paper, 0=between cones, 2 = parking on paper
+STATE_TIME = 0
 
 ################################################################################
 # Constants
@@ -114,14 +117,14 @@ def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[
 
 def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Region:
     # Dilate/Erode
+    kernel11 = np.ones((1, 1), np.uint8)
     kernel22 = np.ones((2, 2), np.uint8)
-    kernel44 = np.ones((4, 4), np.uint8)
 
     # erode = cv2.erode ( dilate , erode , cv:: Mat () , cv :: Point ( -1 , -1) , iterations , 1 , 1)
-    dilate = cv2.dilate (img, kernel44, (-1,-1), iterations=10)
-    erode = cv2.erode (dilate, kernel22, (-1,0), iterations=18)
+    dilate = cv2.dilate (img, kernel22, (-1,-1), iterations=8)
+    erode = cv2.erode (dilate, kernel11, (-1,0), iterations=12)
     #blur = cv2.GaussianBlur(dilate, (11,11), 0)
-    cv2.imshow ( " Erode " , erode)
+    cv2.imshow ( "Dilate " , erode)
 
     # Canny edge detection
     edges = 30
@@ -136,11 +139,13 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
         peri = cv2.arcLength(contour, True)
         area = cv2.contourArea(contour)
         print(area)
-        if area > 3000: #Also a guess, should be tweaked
+        if area > 1500: #Also a guess, should be tweaked
             [x, y, w, h] = cv2.boundingRect(contour)
             if area > paper["area"] :
                 paper = {"area":area, "x":x+w/2, "y":y+h/2}
                 cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
+                if (y > 0.8*HEIGHT) :
+                    return -1
     return paper
 
 
@@ -247,6 +252,9 @@ while True:
     #yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
     #blue = get_cone_positions(blueCones, img, (0, 0, 255))
     paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
+    if (paper == -1 and STATE == 1) :
+        STATE = 2
+        STATE_TIME = datetime.datetime.now()
     print(paper)
 
     #max_y_blue = WIDTH
@@ -299,16 +307,20 @@ while True:
         groundSteeringRequest = (
             opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
         )
-        # In range [-38 deg, 38 deg]
-        steer_deg = (goal_pos.y / (WIDTH // 2)) * 38
-        steer_rad = steer_deg / 180 * 3.141
-        groundSteeringRequest.groundSteering = steer_def
-        session.send(1090, groundSteeringRequest.SerializeToString())
+        if (STATE == 1) : 
+            # In range [-38 deg, 38 deg]
+            steer_deg = (goal_pos.y / (WIDTH // 2)) * 38
+            steer_rad = steer_deg / 180 * 3.141
+            groundSteeringRequest.groundSteering = steer_def
+            session.send(1090, groundSteeringRequest.SerializeToString())
 
-        # Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
-        # Be careful!
-        pedalPositionRequest = (
+            # Uncomment the following lines to accelerate/decelerate; range: +0.25 (forward) .. -1.0 (backwards).
+            # Be careful!
+            pedalPositionRequest = (
             opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
-        )
-        pedalPositionRequest.position = 0.11
-        session.send(1086, pedalPositionRequest.SerializeToString())
+             )
+            pedalPositionRequest.position = 0.12
+            session.send(1086, pedalPositionRequest.SerializeToString())
+        if (STATE == 2) :
+            pedalPositionRequest.position = 0
+            session.send(1086, pedalPositionRequest.SerializeToString())
