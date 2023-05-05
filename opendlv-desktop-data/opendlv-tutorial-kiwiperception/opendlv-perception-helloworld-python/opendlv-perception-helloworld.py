@@ -39,6 +39,7 @@ curr_x = 1280/2 #Starting value for direction
 # Options
 RUNNING_ON_KIWI = True #This is messy as hell
 REC_FROM_KIWI = False
+LOOK_FOR_PAPER = False
 
 STATE = 1 #1=looking for paper, 0=between cones, 2 = parking on paper
 FRAMES = 0
@@ -129,7 +130,7 @@ def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[
         if 100 < peri < 500:
             area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
-            cones.append(x + w / 2, y + h / 2, area)
+            cones.append({"x": x + w / 2,"y": y + h / 2, "area":area})
             cv2.rectangle(outImg, (x, y), (x + w, y + h), rectColor)
     return cones
 
@@ -250,7 +251,7 @@ while True:
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
     # Remove car
-    cv2.rectangle(hsv, (512, 600), (768, HEIGHT), (0, 0, 0), -1)
+    cv2.rectangle(hsv, (int(WIDTH*(1/6)), 350), (int(WIDTH*(6/7)), HEIGHT), (0, 0, 0), -1)
     # Remove top half
     cv2.rectangle(hsv, (0, 0), (WIDTH, HEIGHT // 2), (0, 0, 0), -1)
 
@@ -261,55 +262,59 @@ while True:
     bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
     #cv2.imshow("bluePaper", bluePaper)
     # Blue
-    blueHsvLow = (100, 50, 50)
+    blueHsvLow = (100, 50, 10) #KIWI_OPTIONS["blueConesLo]
     blueHsvHi = (130, 255, 255)
     blueCones = cv2.inRange(hsv, blueHsvLow, blueHsvHi)
-    # cv2.imshow("Blue Cones", blueCones)
+    #cv2.imshow("Blue Cones", blueCones)
 
     # Yellow
-    yellowHsvLow2 = (15, 50, 50)
-    yellowHsvHi2 = (35, 255, 255)
+    yellowHsvLow2 = (18, 50, 120) #(22, 255, 155)
+    yellowHsvHi2 = (30, 255, 255)
     yellowCones = cv2.inRange(hsv, yellowHsvLow2, yellowHsvHi2)
+    #cv2.imshow("yel Cones", yellowCones)
 
-    #yellow = get_cone_positions(yellowCones, img, (255, 255, 0))
-    #blue = get_cone_positions(blueCones, img, (0, 0, 255))
-    paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
-    if (paper == -1) :
-    	STATE = 2
-    	FRAME_STATE2_ENTRY = FRAMES
-    print(paper)
+    
+    if LOOK_FOR_PAPER : 
+        paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
+        if (paper == -1) :
+            STATE = 2
+            FRAME_STATE2_ENTRY = FRAMES
+        if (STATE == 1) : 
+            paperx = int(paper["x"])
+            papery = int(paper["y"])
+            cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
+            goal_pos = comply_with_iso([paperx, papery])
+        if (STATE == 1) :
+            cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (255, 0, 255), -1)
+        else : 
+            cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (0, 0, 255), -1)
+        print(paper)
+    else :
+        STATE = 1
+        yellow = get_cone_positions(yellowCones, img, (0, 255, 0))
+        blue = get_cone_positions(blueCones, img, (0, 0, 255))
+        max_y_blue = int(WIDTH*(4/5))
+        min_y_yellow = int(WIDTH*(1/5))
+        for p in blue:
+            max_y_blue = min(p["x"], max_y_blue)
+        for p in yellow:
+            min_y_yellow = max(p["x"], min_y_yellow)
 
-    #max_y_blue = WIDTH
-    #min_y_yellow = 0
-    #for p in blue:
-    #    max_y_blue = min(p["x"], max_y_blue)
-    #for p in yellow:
-    #    min_y_yellow = max(p["x"], min_y_yellow)
-
-    #cv2.rectangle(img, (int(min_y_yellow), 250), (int(max_y_blue), HEIGHT-100), (255, 255, 0))
-    #prev_x = int(curr_x)
-    #curr_x = (int(min_y_yellow) + int(max_y_blue)) // 2
-    #x = prev_x + int(((curr_x - prev_x) * 0.6)) #Some sort of tröghet, can be tuned for sure
-    #cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
-    #goal_pos = comply_with_iso({"x": x, "y": 0}) #Cones
+        cv2.rectangle(img, (int(min_y_yellow), 250), (int(max_y_blue), HEIGHT-100), (255, 255, 0))
+        prev_x = int(curr_x)
+        curr_x = (int(min_y_yellow) + int(max_y_blue)) // 2
+        x = prev_x + int(((curr_x - prev_x) * 0.6)) #Some sort of tröghet, can be tuned for sure
+        cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
+        goal_pos = comply_with_iso([x, 0]) #Cones
     #paperMiddleX = paper["x"] + paper["w"] / 2
     #paperMiddleY = paper["y"] + paper["h"] / 2
-    if (STATE == 1) : 
-        paperx = int(paper["x"])
-        papery = int(paper["y"])
-        cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
-        goal_pos = comply_with_iso([paperx, papery])
+    
 
     if not RUNNING_ON_KIWI:
     	pass
-        #cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255)) # Yellow aim-line
-    if (STATE == 1) : 
-    	cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (255, 0, 255), -1)
-    else : 
-    	cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (0, 0, 255), -1)
-    cv2.imshow("image", img)
-    print("STATE = ", STATE)
-    cv2.waitKey(1)
+    
+    #cv2.imshow("image", img)
+    #cv2.waitKey(1)
     
         
 
@@ -340,7 +345,7 @@ while True:
         )
         if (STATE == 1) : 
             # In range [-38 deg, 38 deg]
-            steer_deg = (goal_pos[1] / (WIDTH // 1)) * 38
+            steer_deg = (goal_pos[1] / (WIDTH // 1)) * 38 - 1
             steer_rad = steer_deg / 180 * 3.141
             groundSteeringRequest.groundSteering = steer_rad
             session.send(1090, groundSteeringRequest.SerializeToString())
@@ -350,7 +355,7 @@ while True:
             pedalPositionRequest = (
             opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
              )
-            pedalPositionRequest.position = 0.11
+            pedalPositionRequest.position = 0.11 if FRAMES < 10 else 0.1 #CHANGE
             session.send(1086, pedalPositionRequest.SerializeToString())
         if (STATE == 2) :
             pedalPositionRequest = (
@@ -358,7 +363,9 @@ while True:
                 )
             pedalPositionRequest.position = 0.11
             session.send(1086, pedalPositionRequest.SerializeToString())
-            if (FRAME_STATE2_ENTRY + 1 < FRAMES) :
+            groundSteeringRequest.groundSteering = steer_rad
+            session.send(1090, groundSteeringRequest.SerializeToString())
+            if (FRAME_STATE2_ENTRY < FRAMES) :
             	STATE = 3
             	FRAME_STATE2_ENTRY = FRAMES
         if (STATE == 3) :
