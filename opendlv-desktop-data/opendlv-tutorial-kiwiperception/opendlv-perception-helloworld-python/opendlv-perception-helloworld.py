@@ -41,9 +41,17 @@ RUNNING_ON_KIWI = True #This is messy as hell
 REC_FROM_KIWI = False
 LOOK_FOR_PAPER = False
 
-STATE = 1 #1=looking for paper, 0=between cones, 2 = parking on paper
+BETWEEN_CONES = 0
+LOOKING_FOR_PAPER = 1
+ON_PAPER = 2
+PARK = 3
+LOOKING_FOR_POSTIT = 4
+STATE = ON_PAPER
+
 FRAMES = 0
 FRAME_STATE2_ENTRY = 0
+
+TAKE_IMAGE = False
 
 ################################################################################
 # Constants
@@ -55,10 +63,10 @@ KIWI_OPTIONS = {
     "camera_name": "/tmp/img.bgr",
     "blueLo": (90, 50, 50),
     "blueHi": (110 , 255 , 255),
-    "blueConeLo": 0,
-    "blueConeHi": 0,
-    "yelConeLo": 0,
-    "yelConeHi": 0
+    "blueConeLo": (100, 50, 10),
+    "blueConeHi": (130, 255, 255),
+    "yelConeLo": (18, 50, 120),
+    "yelConeHi": (30, 255, 255)
 }
 REPLAY_OPTIONS = {
     "width": 1280,
@@ -68,10 +76,10 @@ REPLAY_OPTIONS = {
     "camera_name": "/tmp/img.argb",
     "blueLo": (90, 100, 50),
     "blueHi": (110 , 200 , 150),
-    "blueConeLo": 0,
-    "blueConeHi": 0,
-    "yelConeLo": 0,
-    "yelConeHi": 0
+    "blueConeLo": (100, 50, 10),
+    "blueConeHi": (130, 255, 255),
+    "yelConeLo": (18, 50, 120),
+    "yelConeHi": (30, 255, 255)
 }
 REC_OPTIONS = {
     "width": 640,
@@ -81,10 +89,10 @@ REC_OPTIONS = {
     "camera_name": "/tmp/img.argb",
     "blueLo": (90, 100, 50),
     "blueHi": (110 , 200 , 150),
-    "blueConeLo": 0,
-    "blueConeHi": 0,
-    "yelConeLo": 0,
-    "yelConeHi": 0
+    "blueConeLo": (100, 50, 10),
+    "blueConeHi": (130, 255, 255),
+    "yelConeLo": (18, 50, 120),
+    "yelConeHi": (30, 255, 255)
 }
 OPTIONS = KIWI_OPTIONS if RUNNING_ON_KIWI else REPLAY_OPTIONS 
 OPTIONS = REC_OPTIONS if REC_FROM_KIWI else OPTIONS
@@ -96,11 +104,9 @@ CAMERA_NAME : str = OPTIONS["camera_name"]
 # Default target point in middle of image
 prev_x = WIDTH // 2
 
-
 ################################################################################
 def comply_with_iso(pos: tuple[int , int]) -> tuple:
     return [HEIGHT - pos[0], -pos[0] + WIDTH // 2]
-
 
 ################################################################################
 def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[Region]:
@@ -123,7 +129,6 @@ def get_cone_positions(img, outImg, rectColor: tuple[int, int, int]) : #-> list[
     contours, _hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     #cv2.imshow("Counturs" , canny )
 
-    #cones: list[Region] = []
     cones = []
     for contour in contours:
         peri = cv2.arcLength(contour, True)
@@ -154,7 +159,7 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
 
     contours, hierarchy = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     #cv2.imshow("Counturs" , canny )
-    paper = {"area":0, "x":WIDTH/2, "y":HEIGHT} #Maybe it will drive in a circle and look for a paper???
+    paper = {"area":0, "x":WIDTH/2, "y":HEIGHT} 
     for contour in contours:
         peri = cv2.arcLength(contour, True)
         area = cv2.contourArea(contour)
@@ -165,11 +170,10 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
                 paper = {"area":area, "x":x+w/2, "y":y+h/2}
                 cv2.rectangle(outImg, (x,y), (x+w,y+h), rectColor)
                 if (y+h/2 > 0.8*HEIGHT) :
-                	STATE = 2
+                	STATE = ON_PAPER
                 	FRAME_STATE2_ENTRY = FRAMES
                 	return -1
     return paper
-
 
 ################################################################################
 # This dictionary contains all distance values to be filled by function onDistance(...).
@@ -246,6 +250,9 @@ while True:
 
     # Turn buf into img array (1280 * 720 * 4 bytes (ARGB)) to be used with OpenCV.
     img = np.frombuffer(buf, np.uint8).reshape(HEIGHT, WIDTH, CHANNELS)
+    if(TAKE_IMAGE)
+        cv2.imWrite("test.jpg", img)
+        exit
 
     ############################################################################
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -261,36 +268,36 @@ while True:
     paperHsvHi = KIWI_OPTIONS["blueHi"]
     bluePaper = cv2.inRange ( hsv , paperHsvLow , paperHsvHi )
     #cv2.imshow("bluePaper", bluePaper)
+    
     # Blue
-    blueHsvLow = (100, 50, 10) #KIWI_OPTIONS["blueConesLo]
-    blueHsvHi = (130, 255, 255)
+    blueHsvLow = KIWI_OPTIONS["blueConeLo"]
+    blueHsvHi = KIWI_OPTIONS["blueConeHi"]
     blueCones = cv2.inRange(hsv, blueHsvLow, blueHsvHi)
     #cv2.imshow("Blue Cones", blueCones)
 
     # Yellow
-    yellowHsvLow2 = (18, 50, 120) #(22, 255, 155)
-    yellowHsvHi2 = (30, 255, 255)
+    yellowHsvLow2 = KIWI_OPTIONS["yelConeLo"]
+    yellowHsvHi2 = KIWI_OPTIONS["yelConeHi"]
     yellowCones = cv2.inRange(hsv, yellowHsvLow2, yellowHsvHi2)
     #cv2.imshow("yel Cones", yellowCones)
 
-    
-    if LOOK_FOR_PAPER : 
+    if LOOK_FOR_PAPER :
         paper = get_paper_positions(bluePaper, img, (255, 0 , 0))
         if (paper == -1) :
-            STATE = 2
+            STATE = ON_PAPER
             FRAME_STATE2_ENTRY = FRAMES
-        if (STATE == 1) : 
+        if (STATE == LOOKING_FOR_PAPER) : 
             paperx = int(paper["x"])
             papery = int(paper["y"])
             cv2.rectangle(img, (paperx, papery), (paperx + 10, papery + 10), (0, 255, 255), -1)
             goal_pos = comply_with_iso([paperx, papery])
-        if (STATE == 1) :
+        if (STATE == LOOKING_FOR_PAPER) :
             cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (255, 0, 255), -1)
         else : 
             cv2.rectangle(img, (0, int(HEIGHT * 0.8)), (WIDTH, int(HEIGHT * 0.8) + 5), (0, 0, 255), -1)
         print(paper)
     else :
-        STATE = 1
+        STATE = LOOKING_FOR_PAPER
         yellow = get_cone_positions(yellowCones, img, (0, 255, 0))
         blue = get_cone_positions(blueCones, img, (0, 0, 255))
         max_y_blue = int(WIDTH*(4/5))
@@ -306,18 +313,11 @@ while True:
         x = prev_x + int(((curr_x - prev_x) * 0.6)) #Some sort of tröghet, can be tuned for sure
         cv2.rectangle(img, (x, 0), (x, HEIGHT), (0, 255, 255))
         goal_pos = comply_with_iso([x, 0]) #Cones
-    #paperMiddleX = paper["x"] + paper["w"] / 2
-    #paperMiddleY = paper["y"] + paper["h"] / 2
-    
 
     if not RUNNING_ON_KIWI:
-    	pass
+        cv2.imshow("image", img)
+        cv2.waitKey(1)
     
-    #cv2.imshow("image", img)
-    #cv2.waitKey(1)
-    
-        
-
     ############################################################################
     # Example: Accessing the distance readings.
     print("Front = %s" % (str(distances["front"])))
@@ -343,7 +343,7 @@ while True:
         groundSteeringRequest = (
             opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
         )
-        if (STATE == 1) : 
+        if (STATE == LOOKING_FOR_PAPER) :
             # In range [-38 deg, 38 deg]
             steer_deg = (goal_pos[1] / (WIDTH // 1)) * 38 - 1
             steer_rad = steer_deg / 180 * 3.141
@@ -357,7 +357,7 @@ while True:
              )
             pedalPositionRequest.position = 0.11 if FRAMES < 10 else 0.1 #CHANGE
             session.send(1086, pedalPositionRequest.SerializeToString())
-        if (STATE == 2) :
+        if (STATE == ON_PAPER) :
             pedalPositionRequest = (
                 opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
                 )
@@ -366,9 +366,9 @@ while True:
             groundSteeringRequest.groundSteering = steer_rad
             session.send(1090, groundSteeringRequest.SerializeToString())
             if (FRAME_STATE2_ENTRY < FRAMES) :
-            	STATE = 3
+            	STATE = PARK
             	FRAME_STATE2_ENTRY = FRAMES
-        if (STATE == 3) :
+        if (STATE == PARK) :
             pedalPositionRequest = (
                 opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_PedalPositionRequest()
                 )
