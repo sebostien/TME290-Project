@@ -37,9 +37,9 @@ curr_x = 1280/2 #Starting value for direction
 
 ################################################################################
 # Options
-RUNNING_ON_KIWI = True #This is messy as hell
-REC_FROM_KIWI = False
-LOOK_FOR_PAPER = False
+RUNNING_ON_KIWI = False #This is messy as hell
+REC_FROM_KIWI = True
+LOOK_FOR_PAPER = True
 
 BETWEEN_CONES = 0
 LOOKING_FOR_PAPER = 1
@@ -178,6 +178,7 @@ def get_paper_positions(img, outImg, rectColor: tuple[int, int, int]) : # -> Reg
 ################################################################################
 # This dictionary contains all distance values to be filled by function onDistance(...).
 distances = {"front": 0.0, "left": 0.0, "right": 0.0, "rear": 0.0}
+speed = 0
 
 
 ################################################################################
@@ -212,6 +213,15 @@ session.registerMessageCallback(
     MESSAGE_ID_DISTANCE_READING,
     onDistance,
     opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_DistanceReading,
+)
+def setSpeed(message) :
+    speed = message.groundSpeed
+    print("speed: " + speed)
+MESSAGE_ID_SPEED_READING = 1046
+session.registerMessageCallback(
+    MESSAGE_ID_SPEED_READING,
+    setSpeed,
+    opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSpeedReading,
 )
 # Connect to the network session.
 session.connect()
@@ -250,7 +260,7 @@ while True:
 
     # Turn buf into img array (1280 * 720 * 4 bytes (ARGB)) to be used with OpenCV.
     img = np.frombuffer(buf, np.uint8).reshape(HEIGHT, WIDTH, CHANNELS)
-    if(TAKE_IMAGE)
+    if(TAKE_IMAGE) : 
         cv2.imWrite("test.jpg", img)
         exit
 
@@ -328,11 +338,20 @@ while True:
     ############################################################################
     # Example for creating and sending a message to other microservices; can
     # be removed when not needed.
-    # angleReading = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_AngleReading()
-    # angleReading.angle = 123.45
+    angleReading = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_AngleReading()
+    #angleReading.angle = 123.45
 
     # 1038 is the message ID for opendlv.proxy.AngleReading
-    # session.send(1038, angleReading.SerializeToString());
+    session.send(1038, angleReading.SerializeToString());
+
+    print(angleReading)
+
+    ############################################################################
+    # "Global navigation"
+    speed = opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSpeedReading()
+    speed.groundSpeed
+    print(speed)
+
 
     ############################################################################
     # Steering and acceleration/decelration.
