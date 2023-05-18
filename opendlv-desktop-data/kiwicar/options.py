@@ -23,13 +23,13 @@ class State(Enum):
 # Global options
 
 DEBUG = True
-MODE = Mode.REC_FROM_TASKS
+MODE = Mode.RUNNING_ON_KIWI
 START_STATE = State.BETWEEN_CONES
 
 # Distance below this on front sensor will make the car stop
-STOP_DISTANCE_FRONT = 100
+STOP_DISTANCE_FRONT = 0.3  # m
 # Distance above this on front sensor will not limit the speed of the car
-FULL_DISTANCE_FRONT = 300
+FULL_DISTANCE_FRONT = 0.8  # m
 
 ################################################################################
 # Constants
