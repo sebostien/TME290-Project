@@ -17,7 +17,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from StateMachine import StateMachine
-from yolov3_tiny import forwardDNN
 from options import OPTIONS, START_STATE
 import time
 
@@ -26,7 +25,6 @@ import sysv_ipc
 
 # numpy and cv2 are needed to access, modify, or display the pixels
 import numpy as np
-import cv2
 
 # OD4Session is needed to send and receive messages
 import OD4Session

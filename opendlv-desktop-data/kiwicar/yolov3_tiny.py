@@ -1,7 +1,7 @@
 import cv2
+from timeit import default_timer as timer
 import numpy as np
 
-# TODO: Move
 confThreshold = 0.2  # Confidence threshold
 nmsThreshold = 0.2  # Non-maximum suppression threshold
 
@@ -38,14 +38,13 @@ class Prediction:
 
 # img needs to be rgb
 def forwardDNN(img: np.ndarray, outImage: np.ndarray) -> list[Prediction]:
+    start = timer()
     blob = cv2.dnn.blobFromImage(
         img, 1 / 255, (netWidth, netHeight), [0, 0, 0], 1, crop=False
     )
     kiwiNet.setInput(blob)
     output = kiwiNet.forward()
 
-    t, _ = kiwiNet.getPerfProfile()
-    print("Inference time: %.2f ms" % (t * 1000.0 / cv2.getTickFrequency()))
     shape = img.shape
     prediction = handleOutput(shape[1], shape[0], output)
     for p in prediction:
@@ -56,8 +55,10 @@ def forwardDNN(img: np.ndarray, outImage: np.ndarray) -> list[Prediction]:
             (p.x1, p.y1 - 10),
             cv2.FONT_HERSHEY_COMPLEX,
             0.5,
-            (0, 0, CAR_RECTANGLE),
+            CAR_RECTANGLE,
         )
+    end = timer()
+    print("Inference time: %.0f ms" % ((end - start) * 1000))
     return prediction
 
 
@@ -89,7 +90,6 @@ def handleOutput(imgWidth: int, imgHeight: int, dnn_output) -> list[Prediction]:
         w = box[2]
         h = box[3]
         rects.append(Prediction(x1, y1, x1 + w, y1 + h, confidences[i]))
-
     return rects
 
 
