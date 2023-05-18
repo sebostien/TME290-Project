@@ -1,19 +1,11 @@
 # TME290 Assignment
 
-```sh
-./setup.sh
-docker compose up
-```
+## Darknet YOLOv3-tiny
 
-Open two terminals inside OpenDLV.
+Clone and compile [darknet](https://github.com/AlexeyAB/darknet) into
+`./darknet/` directory.
 
-```sh
-cd data/opendlv-tutorial-kiwiperception/opendlv-perception-helloworld-python
-make
-python3 opendlv-perception-helloworld.py
-```
+Run `darknet/train.sh` to continue training.
 
-```sh
-cd data/opendlv-tutorial-kiwitasks
-docker compose up
-```
+Using `width = 192` and `height = 128` to keep the kiwi-car's aspect ratio.
+Large enough to get good accuracy with limited time of training (~3 hours).

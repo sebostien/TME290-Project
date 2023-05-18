@@ -14,9 +14,6 @@ testTxt = "./build/darknet/x64/data/test.txt"
 trainImages = []
 valImages = []
 
-val = 0
-train = 0
-
 try:
     os.mkdir(imgDir)
 except:
