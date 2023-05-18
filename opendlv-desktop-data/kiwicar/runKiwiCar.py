@@ -99,24 +99,5 @@ while True:
         OPTIONS.height, OPTIONS.width, OPTIONS.channels
     )
 
-    # For new training images
-    cv2.imwrite(f"./images/{millis()}.jpg", img)
-
-    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    forwardDNN(rgb, img)
-
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-    # Remove car
-    cv2.rectangle(
-        hsv,
-        (int(OPTIONS.width * (1 / 7)), int(OPTIONS.height * 0.8)),
-        (int(OPTIONS.width * (6 / 7)), OPTIONS.height),
-        (0, 0, 0),
-        -1,
-    )
-    # Remove top half
-    cv2.rectangle(hsv, (0, 0), (OPTIONS.width, OPTIONS.height // 2), (0, 0, 0), -1)
-
     # Run the state
-    stateMachine.runState(hsv, img)
+    stateMachine.runState(img)

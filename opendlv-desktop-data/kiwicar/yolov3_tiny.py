@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 # TODO: Move
-confThreshold = 0.05  # Confidence threshold
+confThreshold = 0.2  # Confidence threshold
 nmsThreshold = 0.2  # Non-maximum suppression threshold
 
 CAR_RECTANGLE = (0, 0, 255)
@@ -50,6 +50,14 @@ def forwardDNN(img: np.ndarray, outImage: np.ndarray) -> list[Prediction]:
     prediction = handleOutput(shape[1], shape[0], output)
     for p in prediction:
         cv2.rectangle(outImage, (p.x1, p.y1), (p.x2, p.y2), CAR_RECTANGLE, 2)
+        cv2.putText(
+            outImage,
+            f"{round(p.confidence * 100, 2)}%",
+            (p.x1, p.y1 - 10),
+            cv2.FONT_HERSHEY_COMPLEX,
+            0.5,
+            (0, 0, CAR_RECTANGLE),
+        )
     return prediction
 
 

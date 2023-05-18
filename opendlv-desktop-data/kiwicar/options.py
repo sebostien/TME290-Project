@@ -12,18 +12,24 @@ class State(Enum):
     NOTHING = 0
     DEBUG_COLORS = 1
     BETWEEN_CONES = 2
-    LOOK_FOR_PAPER = 3
-    LOOK_FOR_POSTIT = 4
-    WIGGLE_WHEELS_THEN_POSTIT = 5
-    WIGGLE_WHEELS_THEN_BLUE = 6
+    BETWEEN_CONES_WITH_CARS = 3
+    LOOK_FOR_PAPER = 4
+    LOOK_FOR_POSTIT = 5
+    WIGGLE_WHEELS_THEN_POSTIT = 6
+    WIGGLE_WHEELS_THEN_PAPER = 7
 
 
 ################################################################################
-# Options
+# Global options
 
 DEBUG = True
 MODE = Mode.REC_FROM_TASKS
 START_STATE = State.BETWEEN_CONES
+
+# Distance below this on front sensor will make the car stop
+STOP_DISTANCE_FRONT = 100
+# Distance above this on front sensor will not limit the speed of the car
+FULL_DISTANCE_FRONT = 300
 
 ################################################################################
 # Constants
@@ -62,8 +68,8 @@ match MODE:
                 "cameraName": "/tmp/img.bgr",
                 "bluePaperLow": (90, 50, 50),
                 "bluePaperHigh": (110, 255, 255),
-                "greenPostItLow": (0, 0, 0),
-                "greenPostItHigh": (0, 0, 0),
+                "greenPostItLow": (30, 50, 120),
+                "greenPostItHigh": (45, 255, 255),
                 "blueConeLow": (100, 50, 20),
                 "blueConeHigh": (130, 255, 255),
                 "yellowConeLow": (18, 50, 120),
@@ -80,8 +86,8 @@ match MODE:
                 "cameraName": "/tmp/img.argb",
                 "bluePaperLow": (90, 100, 50),
                 "bluePaperHigh": (110, 200, 150),
-                "greenPostItLow": (0, 0, 0),
-                "greenPostItHigh": (0, 0, 0),
+                "greenPostItLow": (30, 50, 120),
+                "greenPostItHigh": (45, 255, 255),
                 "blueConeLow": (100, 50, 20),
                 "blueConeHigh": (130, 255, 255),
                 "yellowConeLow": (18, 50, 120),
@@ -98,8 +104,8 @@ match MODE:
                 "cameraName": "/tmp/img.argb",
                 "bluePaperLow": (90, 100, 50),
                 "bluePaperHigh": (110, 200, 150),
-                "greenPostItLow": (0, 0, 0),
-                "greenPostItHigh": (0, 0, 0),
+                "greenPostItLow": (30, 50, 120),
+                "greenPostItHigh": (45, 255, 255),
                 "blueConeLow": (100, 50, 20),
                 "blueConeHigh": (130, 255, 255),
                 "yellowConeLow": (18, 50, 120),
