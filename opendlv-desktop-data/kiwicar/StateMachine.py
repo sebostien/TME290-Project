@@ -16,7 +16,7 @@ import opendlv_standard_message_set_v0_9_10_pb2
 import OD4Session
 import cv2
 
-WIGGLE_WHEELS_MILLIS = 2000  # Number of ms to wiggle wheels
+WIGGLE_WHEELS_MILLIS = 5000  # Number of ms to wiggle wheels
 MIN_PEDAL_POSITION = 0.135
 MAX_PEDAL_POSITION = 0.16
 CONE_MIN_AREA = OPTIONS.width * OPTIONS.height * 0.0002
@@ -140,7 +140,7 @@ class StateMachine:
                 self.sendPedalRequest(0)
                 # Change direction of wheels every 500 ms
                 self.sendSteerRequest(
-                    10 if self.stateEntryTime // 500 % 2 == 0 else -10
+                    20 if self.stateEntryTime // 100 % 2 == 0 else -20
                 )
             case State.DRIVE_BEHIND_CAR:
                 pedal = MIN_PEDAL_POSITION
@@ -285,7 +285,7 @@ class StateMachine:
             # area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
             area = w * h
-            print(area)
+            # print(area)
             if area > 1000:  # Also a guess, should be tweaked
                 if area > paper.area:
                     cv2.rectangle(outImg, (x, y), (x + w, y + h), PAPER_RECTANGLE)
@@ -321,7 +321,7 @@ class StateMachine:
             # area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
             area = w * h
-            print(area)
+            # print(area)
             if area > 1000:  # Also a guess, should be tweaked
                 if area > postIt.area:
                     cv2.rectangle(outImg, (x, y), (x + w, y + h), POST_IT_RECTANGLE)
@@ -433,7 +433,7 @@ class StateMachine:
         self.sendSteerRequest(angle)
         pedal = self.targetToPedal(angle)
 
-        print(f"Distance front: {self.distFront}")
+        # print(f"Distance front: {self.distFront}")
 
         # Check that the car is not blocked.
         # Only checks with the net if necessary
@@ -447,7 +447,7 @@ class StateMachine:
                 # Check net
                 prediction = self.getKiwiPredictions(bgrImg, outImg)
                 if len(prediction) > 0:
-                    print(prediction[0].x1)
+                    # print(prediction[0].x1)
                     # Limit speed if car found
                     pedal = MIN_PEDAL_POSITION
         self.sendPedalRequest(pedal)
