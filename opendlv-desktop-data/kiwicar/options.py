@@ -17,6 +17,7 @@ class State(Enum):
     LOOK_FOR_POSTIT = 5
     WIGGLE_WHEELS_THEN_POSTIT = 6
     WIGGLE_WHEELS_THEN_PAPER = 7
+    DRIVE_BEHIND_CAR = 8
 
 
 ################################################################################
@@ -24,7 +25,7 @@ class State(Enum):
 
 DEBUG = True
 MODE = Mode.REC_FROM_TASKS
-START_STATE = State.BETWEEN_CONES_WITH_CARS
+START_STATE = State.DRIVE_BEHIND_CAR
 
 # Distance below this on front sensor will make the car stop
 STOP_DISTANCE_FRONT = 0.2  # m

@@ -92,7 +92,7 @@ class StateMachine:
         """
         self.stateEntryTime = 0
         match self.currentState:
-            case State.NOTHING | State.BETWEEN_CONES | State.BETWEEN_CONES_WITH_CARS | State.DEBUG_COLORS:
+            case State.NOTHING | State.BETWEEN_CONES | State.BETWEEN_CONES_WITH_CARS | State.DEBUG_COLORS | State.DRIVE_BEHIND_CAR:
                 return
             case State.LOOK_FOR_PAPER:
                 self.currentState = State.WIGGLE_WHEELS_THEN_POSTIT
@@ -141,6 +141,25 @@ class StateMachine:
                 self.sendSteerRequest(
                     10 if self.stateEntryTime // 500 % 2 == 0 else -10
                 )
+            case State.DRIVE_BEHIND_CAR:
+                pedal = MIN_PEDAL_POSITION
+                angle = 0
+                # Check if car is blocked
+                if self.distFront > 0 and self.distFront < STOP_DISTANCE_FRONT:
+                    pedal = 0
+                else:
+                    prediction = self.getKiwiPredictions(bgrImg, outImg)
+                    if len(prediction) > 0:
+                        # Found car
+                        cx = (prediction[0].x1 + prediction[0].x2) // 2
+                        world = self.screenToWorld(cx, 0)
+                        angle = self.targetToAngle(world)
+                    else:
+                        # No car found
+                        angle = -38  # TODO: What should we do here
+
+                self.sendSteerRequest(angle)
+                self.sendPedalRequest(pedal)
 
         if DEBUG:
             imshow("Image", outImg)
