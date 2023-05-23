@@ -140,7 +140,7 @@ class StateMachine:
                 self.sendPedalRequest(0)
                 # Change direction of wheels every 500 ms
                 self.sendSteerRequest(
-                    20 if self.stateEntryTime // 100 % 2 == 0 else -20
+                    20 if self.stateEntryTime // 1000 % 2 == 0 else -20
                 )
             case State.DRIVE_BEHIND_CAR:
                 pedal = MIN_PEDAL_POSITION
@@ -301,10 +301,11 @@ class StateMachine:
     ) -> Region | None:
         img = cv2.inRange(hsvImg, OPTIONS.greenPostItLow, OPTIONS.greenPostItHigh)
         imshow("PostIt color", img)
-        img = cv2.dilate(img, KERNEL_2_2, iterations=10)
+        img = cv2.erode(img, KERNEL_2_2, iterations=2)
+        img = cv2.dilate(img, KERNEL_2_2, iterations=15)
+        img = cv2.erode(img, KERNEL_2_2, iterations=4)
         # imshow("PostIt dilate", img)
-        img = cv2.erode(img, KERNEL_1_1, iterations=15)
-        # imshow("PostIt erode", img)
+        imshow("PostIt erode", img)
 
         # Canny edge detection
         edges = 30
@@ -321,8 +322,9 @@ class StateMachine:
             # area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
             area = w * h
-            # print(area)
-            if area > 1000:  # Also a guess, should be tweaked
+            if area > 100:  # Also a guess, should be tweaked
+                print(area)
+
                 if area > postIt.area:
                     cv2.rectangle(outImg, (x, y), (x + w, y + h), POST_IT_RECTANGLE)
                     postIt = Region(x + w / 2, y + h / 2, area)
@@ -509,7 +511,8 @@ class StateMachine:
             if self.distFront < 0.3:
                 self.sendSteerRequest(-38)
             else:
-                self.sendSteerRequest(-5)
+                angle = self.targetToAngle(self.prevTarget)
+                self.sendSteerRequest(angle)
             self.sendPedalRequest(MIN_PEDAL_POSITION)
         else:
             # Found postIt
@@ -528,6 +531,7 @@ class StateMachine:
                 self.sendPedalRequest(0)
                 return
             goal = self.screenToWorld(postIt.mid.x, postIt.mid.y)
+            self.prevTarget = goal
             angle = self.targetToAngle(goal)
             self.sendSteerRequest(angle)
             self.sendPedalRequest(MIN_PEDAL_POSITION)

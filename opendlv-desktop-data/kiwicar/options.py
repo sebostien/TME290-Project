@@ -106,7 +106,7 @@ match MODE:
                 "cid": 111,
                 "cameraName": "/tmp/img.argb",
                 "bluePaperLow": (90, 100, 50),
-                "bluePaperHigh": (110, 200, 150),
+                "bluePaperHigh": (110, 255, 255),
                 "greenPostItLow": (30, 50, 120),
                 "greenPostItHigh": (45, 255, 255),
                 "blueConeLow": (100, 50, 20),
