@@ -23,9 +23,9 @@ class State(Enum):
 ################################################################################
 # Global options
 
-DEBUG = True
-MODE = Mode.REC_FROM_TASKS
-START_STATE = State.DEBUG_COLORS
+DEBUG = False
+MODE = Mode.RUNNING_ON_KIWI
+START_STATE = State.LOOK_FOR_PAPER
 
 # Distance below this on front sensor will make the car stop
 STOP_DISTANCE_FRONT = 0.2  # m

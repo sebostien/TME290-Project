@@ -108,6 +108,7 @@ class StateMachine:
                 return
 
     def runState(self, bgrImg: np.ndarray):
+        print(self.currentState)
         # For new training images
         # millis = lambda: round(time.time() * 1000)
         # cv2.imwrite(f"./images/{millis()}.jpg", bgrImg)
@@ -200,14 +201,19 @@ class StateMachine:
 
     # World coodrinate x: [0,1], y: [-1, 1]
     def worldToScreen(self, worldCoordinate: Vec2) -> tuple[int, int]:
-        x = self.width / 2 + (self.width / 2) * worldCoordinate.y
-        y = self.height - self.height * worldCoordinate.x
-
-        return (int(x), int(y))
+        # x = self.width / 2 + (self.width / 2) * worldCoordinate.y
+        # y = self.height - self.height * worldCoordinate.x
+        x = self.height - worldCoordinate.y
+        y = - worldCoordinate.x + self.width / 2
+        # eturn [HEIGHT - pos[0], -pos[0] + WIDTH // 2]
+        return (int(x), -int(y))
 
     # Returns angle to target
     def targetToAngle(self, target: Vec2) -> float:
-        return target.y * 38
+        # return target.y, 38)
+        steer_deg = (target.y / self.width) * 38 - 1
+        steer_rad = steer_deg / 180 * 3.141
+        return steer_rad
 
     def targetToPedal(self, steerAngle: float) -> float:
         # TODO: Add distance to car in-front
