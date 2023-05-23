@@ -25,7 +25,7 @@ class State(Enum):
 
 DEBUG = True
 MODE = Mode.REC_FROM_TASKS
-START_STATE = State.DRIVE_BEHIND_CAR
+START_STATE = State.DEBUG_COLORS
 
 # Distance below this on front sensor will make the car stop
 STOP_DISTANCE_FRONT = 0.2  # m

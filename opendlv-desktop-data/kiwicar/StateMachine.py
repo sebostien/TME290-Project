@@ -121,8 +121,8 @@ class StateMachine:
                 self.sendPedalRequest(0)
             case State.DEBUG_COLORS:
                 print(f"Min area: {CONE_MIN_AREA}, Max area: {CONE_MAX_AREA}")
-                self.getBlueCones(hsvImg, outImg)
-                self.getYellowCones(hsvImg, outImg)
+                # self.getBlueCones(hsvImg, outImg)
+                # self.getYellowCones(hsvImg, outImg)
                 self.getPaperPosition(hsvImg, outImg)
                 self.getPostItPosition(hsvImg, outImg)
             case State.BETWEEN_CONES_WITH_CARS:
@@ -280,7 +280,7 @@ class StateMachine:
         self, hsvImg: np.ndarray, outImg: np.ndarray
     ) -> Region | None:
         img = cv2.inRange(hsvImg, OPTIONS.greenPostItLow, OPTIONS.greenPostItHigh)
-        # imshow("PostIt color", img)
+        imshow("PostIt color", img)
         img = cv2.dilate(img, KERNEL_2_2, iterations=10)
         # imshow("PostIt dilate", img)
         img = cv2.erode(img, KERNEL_1_1, iterations=15)
@@ -468,8 +468,8 @@ class StateMachine:
             self.sendPedalRequest(MIN_PEDAL_POSITION)
 
     def handleState_LOOK_FOR_POSTIT(self, hsvImg: np.ndarray, outImg: np.ndarray):
-        # Need to look for paper. Right now looks after 2 min
-        if self.stateEntryTime > 2 * 60 * 1000:
+        # Need to look for paper. Right now looks after 1 min
+        if self.stateEntryTime > 1 * 60 * 1000:
             # Need to find paper
             self.currentState = State.LOOK_FOR_PAPER
             return
@@ -479,7 +479,10 @@ class StateMachine:
             # No postIt found
             # TODO: Drive in circle?
             # TODO: Break if near wall
-            self.sendSteerRequest(-38)
+            if self.distFront < 0.3:
+                self.sendSteerRequest(-38)
+            else:
+                self.sendSteerRequest(-5)
             self.sendPedalRequest(MIN_PEDAL_POSITION)
         else:
             # Found postIt
@@ -493,7 +496,7 @@ class StateMachine:
             )
             if postIt.mid.y > 0.8 * self.height:
                 # Car is on postIt
-                self.nextState()
+                self.currentState = State.WIGGLE_WHEELS_THEN_POSTIT
                 self.sendSteerRequest(0)
                 self.sendPedalRequest(0)
                 return
