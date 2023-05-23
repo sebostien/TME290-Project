@@ -17,7 +17,7 @@ import OD4Session
 import cv2
 
 WIGGLE_WHEELS_MILLIS = 2000  # Number of ms to wiggle wheels
-MIN_PEDAL_POSITION = 0.11
+MIN_PEDAL_POSITION = 0.135
 MAX_PEDAL_POSITION = 0.16
 CONE_MIN_AREA = OPTIONS.width * OPTIONS.height * 0.0002
 CONE_MAX_AREA = OPTIONS.width * OPTIONS.height * 0.018
@@ -70,12 +70,6 @@ class StateMachine:
         self.stateEntryTime += dt
 
     def onDistance(self, senderStamp: int, distance: float):
-        #  print("Received distance; senderStamp= %s" % (str(senderStamp)))
-        # print(
-        #    "sent: %s, received: %s, sample time stamps: %s"
-        #    % (str(timeStamps[0]), str(timeStamps[1]), str(timeStamps[2]))
-        # )
-        # print("%s" % (msg))
         if senderStamp == 0:
             self.distFront = distance
         if senderStamp == 1:
@@ -105,6 +99,12 @@ class StateMachine:
                 return
             case State.WIGGLE_WHEELS_THEN_PAPER:
                 self.currentState = State.LOOK_FOR_PAPER
+                return
+            case State.GET_OUT_THEN_PAPER:
+                self.currentState = State.LOOK_FOR_PAPER
+                return
+            case State.GET_OUT_THEN_POSTIT:
+                self.currentState = State.LOOK_FOR_POSTIT
                 return
 
     def runState(self, bgrImg: np.ndarray):
@@ -161,6 +161,20 @@ class StateMachine:
 
                 self.sendSteerRequest(angle)
                 self.sendPedalRequest(pedal)
+            case State.GET_OUT_THEN_PAPER | State.GET_OUT_THEN_POSTIT:
+                if self.distFront < 0.2:
+                    if self.distRear < 0.2:
+                        print("STUCK! PLEASE MOVE ME")
+                    else:
+                        # TODO: Maybe check sides
+                        self.sendSteerRequest(-38)
+                        self.sendPedalRequest(MIN_PEDAL_POSITION)
+                elif self.distFront > 0.5:
+                    # We are out
+                    self.nextState()
+                else:
+                    self.sendSteerRequest(38)
+                    self.sendPedalRequest(MIN_PEDAL_POSITION)
 
         if DEBUG:
             imshow("Image", outImg)
@@ -204,7 +218,7 @@ class StateMachine:
         # x = self.width / 2 + (self.width / 2) * worldCoordinate.y
         # y = self.height - self.height * worldCoordinate.x
         x = self.height - worldCoordinate.y
-        y = - worldCoordinate.x + self.width / 2
+        y = -worldCoordinate.x + self.width / 2
         # eturn [HEIGHT - pos[0], -pos[0] + WIDTH // 2]
         return (int(x), -int(y))
 
@@ -447,6 +461,9 @@ class StateMachine:
         cv2.circle(outImg, (goalScreen[0], int(pedalY)), 12, (255, 0, 0), -1)
 
     def handleState_LOOK_FOR_PAPER(self, hsvImg: np.ndarray, outImg: np.ndarray):
+        if self.distFront < STOP_DISTANCE_FRONT:
+            self.currentState = State.GET_OUT_THEN_PAPER
+            return
         paper = self.getPaperPosition(hsvImg, outImg)
         if paper == None:
             # No paper found
@@ -478,6 +495,10 @@ class StateMachine:
         if self.stateEntryTime > 1 * 60 * 1000:
             # Need to find paper
             self.currentState = State.LOOK_FOR_PAPER
+            return
+
+        if self.distFront < STOP_DISTANCE_FRONT:
+            self.currentState = State.GET_OUT_THEN_POSTIT
             return
 
         postIt = self.getPostItPosition(hsvImg, outImg)

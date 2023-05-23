@@ -18,6 +18,8 @@ class State(Enum):
     WIGGLE_WHEELS_THEN_POSTIT = 6
     WIGGLE_WHEELS_THEN_PAPER = 7
     DRIVE_BEHIND_CAR = 8
+    GET_OUT_THEN_PAPER = 9
+    GET_OUT_THEN_POSTIT = 10
 
 
 ################################################################################
