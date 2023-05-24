@@ -8,6 +8,10 @@ from options import (
     Mode,
     STOP_DISTANCE_FRONT,
     FULL_DISTANCE_FRONT,
+    MIN_PEDAL_POSITION,
+    MAX_PEDAL_POSITION,
+    WIGGLE_WHEELS_TURN,
+    WIGGLE_WHEELS_MILLIS,
 )
 from util import Vec2, Region
 from yolov3_tiny import Prediction, forwardDNN
@@ -16,11 +20,9 @@ import opendlv_standard_message_set_v0_9_10_pb2
 import OD4Session
 import cv2
 
-WIGGLE_WHEELS_MILLIS = 5000  # Number of ms to wiggle wheels
-MIN_PEDAL_POSITION = 0.135
-MAX_PEDAL_POSITION = 0.16
 CONE_MIN_AREA = OPTIONS.width * OPTIONS.height * 0.0002
 CONE_MAX_AREA = OPTIONS.width * OPTIONS.height * 0.018
+PUT_RECT_TEXT = True  # Shows information about regions found
 
 BLUE_CONES_RECTANGLE = (255, 0, 0)
 YELLOW_CONES_RECTANGLE = (0, 255, 255)
@@ -36,6 +38,13 @@ KERNEL_4_4 = np.ones((4, 4), np.uint8)
 def imshow(name: str, img: np.ndarray):
     if DEBUG:
         cv2.imshow(name, img)
+
+
+def putText(
+    img: np.ndarray, text: str, x: float, y: float, color: tuple[int, int, int]
+):
+    if PUT_RECT_TEXT:
+        cv2.putText(img, text, (int(x), int(y)), cv2.FONT_HERSHEY_COMPLEX, 0.5, color)
 
 
 class StateMachine:
@@ -100,12 +109,6 @@ class StateMachine:
             case State.WIGGLE_WHEELS_THEN_PAPER:
                 self.currentState = State.LOOK_FOR_PAPER
                 return
-            case State.GET_OUT_THEN_PAPER:
-                self.currentState = State.LOOK_FOR_PAPER
-                return
-            case State.GET_OUT_THEN_POSTIT:
-                self.currentState = State.LOOK_FOR_POSTIT
-                return
 
     def runState(self, bgrImg: np.ndarray):
         print(self.currentState)
@@ -121,9 +124,10 @@ class StateMachine:
                 self.sendSteerRequest(0)
                 self.sendPedalRequest(0)
             case State.DEBUG_COLORS:
-                print(f"Min area: {CONE_MIN_AREA}, Max area: {CONE_MAX_AREA}")
-                # self.getBlueCones(hsvImg, outImg)
-                # self.getYellowCones(hsvImg, outImg)
+                print(f"Min cone area: {CONE_MIN_AREA}")
+                print(f"Max cone area: {CONE_MAX_AREA}")
+                self.getBlueCones(hsvImg, outImg)
+                self.getYellowCones(hsvImg, outImg)
                 self.getPaperPosition(hsvImg, outImg)
                 self.getPostItPosition(hsvImg, outImg)
             case State.BETWEEN_CONES_WITH_CARS:
@@ -135,46 +139,39 @@ class StateMachine:
             case State.LOOK_FOR_POSTIT:
                 self.handleState_LOOK_FOR_POSTIT(hsvImg, outImg)
             case State.WIGGLE_WHEELS_THEN_PAPER | State.WIGGLE_WHEELS_THEN_POSTIT:
+                self.sendPedalRequest(0)
                 if self.stateEntryTime > WIGGLE_WHEELS_MILLIS:
                     self.nextState()
-                self.sendPedalRequest(0)
-                # Change direction of wheels every 500 ms
+                    self.sendSteerRequest(0)
+                    return
                 self.sendSteerRequest(
-                    20 if self.stateEntryTime // 1000 % 2 == 0 else -20
+                    20 if self.stateEntryTime // WIGGLE_WHEELS_TURN % 2 == 0 else -20
                 )
             case State.DRIVE_BEHIND_CAR:
-                pedal = MIN_PEDAL_POSITION
-                angle = 0
-                # Check if car is blocked
-                if self.distFront > 0 and self.distFront < STOP_DISTANCE_FRONT:
-                    pedal = 0
-                else:
-                    prediction = self.getKiwiPredictions(bgrImg, outImg)
-                    if len(prediction) > 0:
-                        # Found car
-                        cx = (prediction[0].x1 + prediction[0].x2) // 2
-                        world = self.screenToWorld(cx, 0)
-                        angle = self.targetToAngle(world)
+                prediction = self.getKiwiPredictions(bgrImg, outImg)
+                if len(prediction) > 0:
+                    # Found car
+                    cx = (prediction[0].x1 + prediction[0].x2) // 2
+                    world = self.screenToWorld(cx, 0)
+                    angle = self.targetToAngle(world)
+                    self.sendSteerRequest(angle)
+                    # Make sure we don't collide
+                    if self.distFront < STOP_DISTANCE_FRONT:
+                        print("Breaking behind car")
+                        self.sendPedalRequest(0)
                     else:
-                        # No car found
-                        angle = -38  # TODO: What should we do here
-
-                self.sendSteerRequest(angle)
-                self.sendPedalRequest(pedal)
-            case State.GET_OUT_THEN_PAPER | State.GET_OUT_THEN_POSTIT:
-                if self.distFront < 0.2:
-                    if self.distRear < 0.2:
-                        print("STUCK! PLEASE MOVE ME")
-                    else:
-                        # TODO: Maybe check sides
-                        self.sendSteerRequest(-38)
+                        print("Following car")
                         self.sendPedalRequest(MIN_PEDAL_POSITION)
-                elif self.distFront > 0.5:
-                    # We are out
-                    self.nextState()
                 else:
-                    self.sendSteerRequest(38)
+                    # Look for a car
+                    if self.distFront < STOP_DISTANCE_FRONT:
+                        self.reverseOut()
+
+                    print("Looking for car")
                     self.sendPedalRequest(MIN_PEDAL_POSITION)
+                    if self.distFront < 0.5:
+                        # Turn
+                        self.sendSteerRequest(-38)
 
         if DEBUG:
             imshow("Image", outImg)
@@ -207,37 +204,47 @@ class StateMachine:
     # Return world coordinate [x,y], x: [0, 1], y: [-1,1]
     def screenToWorld(self, screenX: float, screenY: float) -> Vec2:
         # Convert x from [0, width] to y [-1,1]
-        y = (screenX / self.width) * 2 - 1
+        y = (screenX / self.width) * 2 - 1  # Correct
 
         # Convert y from [0, height] to x [0,1]
-        x = -(screenY / self.height) + 1
+        x = -(screenY / self.height) + 1  # Correct
         return Vec2(x, y)
 
     # World coodrinate x: [0,1], y: [-1, 1]
+    # Screen coodrinate: x: [0,width], y: [0, height]
     def worldToScreen(self, worldCoordinate: Vec2) -> tuple[int, int]:
-        # x = self.width / 2 + (self.width / 2) * worldCoordinate.y
-        # y = self.height - self.height * worldCoordinate.x
-        x = self.height - worldCoordinate.y
-        y = -worldCoordinate.x + self.width / 2
-        # eturn [HEIGHT - pos[0], -pos[0] + WIDTH // 2]
-        return (int(x), -int(y))
+        # World y [-1,1] becomes x [0, width]
+        x = self.width / 2 + (self.width / 2) * worldCoordinate.y  # Correct
+        # World x [0, 1] becomes y [0, height]
+        y = self.height - self.height * worldCoordinate.x  # Correct
+        return (int(x), int(y))
 
-    # Returns angle to target
     def targetToAngle(self, target: Vec2) -> float:
-        # return target.y, 38)
-        steer_deg = (target.y / self.width) * 38 - 1
-        steer_rad = steer_deg / 180 * 3.141
-        return steer_rad
+        """
+        Returns angle to target.
+        Target.y should be in [-1, 1]
+
+        a----b
+        |   /
+        |  /     We want angle t
+        |t/        tan(t) = ab / ac
+        |/
+        c
+        """
+        ab = target.y
+        ac = 1.28  # Angle is 38 when y=1
+        return np.arctan(ab / ac)
 
     def targetToPedal(self, steerAngle: float) -> float:
-        # TODO: Add distance to car in-front
+        """
+        Limits the pedal position depending on the steering angle.
+        """
 
         # Angle in range [-38, 38] deg
         # Steer max when angle is 0 and min when |angle| = 38
         # https://www.wolframalpha.com/input?i=plot+-%7Ctanh%28x+%2F+38+*+pi%29%5E2%7C+%2B+1+from+-38+to+38
-        return (-np.tanh(steerAngle / 38 * np.pi) ** 2 + 1) * (
-            MAX_PEDAL_POSITION - MIN_PEDAL_POSITION
-        ) + MIN_PEDAL_POSITION
+        pedal = -np.tanh(steerAngle / 38 * np.pi) ** 2 + 1  # [0,1]
+        return pedal * (MAX_PEDAL_POSITION - MIN_PEDAL_POSITION) + MIN_PEDAL_POSITION
 
     def getHSVImage(self, bgrImg: np.ndarray) -> np.ndarray:
         """
@@ -271,25 +278,30 @@ class StateMachine:
         img = cv2.erode(img, KERNEL_1_1, iterations=15)
 
         # Canny edge detection
-        edges = 30
-        threashold1 = 90
-        threashold2 = 3
-        canny = cv2.Canny(img, edges, threashold1, threashold2)
+        img = cv2.Canny(img, 30, 90, 3)
 
-        contours, _ = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-        # imshow("Counturs" , canny )
+        contours, _ = cv2.findContours(img, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        # imshow("Counturs", img)
 
         paper = Region(0, 0, 0)
         for contour in contours:
-            # peri = cv2.arcLength(contour, True)
-            # area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
-            area = w * h
-            # print(area)
-            if area > 1000:  # Also a guess, should be tweaked
-                if area > paper.area:
-                    cv2.rectangle(outImg, (x, y), (x + w, y + h), PAPER_RECTANGLE)
-                    paper = Region(x + w / 2, y + h / 2, area)
+            approx = cv2.approxPolyDP(
+                contour, 0.001 * cv2.arcLength(contour, True), True
+            )
+            area = cv2.contourArea(contour)
+            if area < 1000:
+                continue
+            putText(
+                outImg,
+                f"{len(approx)} ; {area}",
+                x,
+                y,
+                (0, 0, 255),
+            )
+            if area > paper.area:
+                cv2.rectangle(outImg, (x, y), (x + w, y + h), PAPER_RECTANGLE)
+                paper = Region(x + w / 2, y + h / 2, area)
 
         if paper.area == 0:
             return None
@@ -300,34 +312,39 @@ class StateMachine:
         self, hsvImg: np.ndarray, outImg: np.ndarray
     ) -> Region | None:
         img = cv2.inRange(hsvImg, OPTIONS.greenPostItLow, OPTIONS.greenPostItHigh)
-        imshow("PostIt color", img)
+        # imshow("PostIt color", img)
         img = cv2.erode(img, KERNEL_2_2, iterations=2)
+        # imshow("PostIt erode 1", img)
         img = cv2.dilate(img, KERNEL_2_2, iterations=15)
-        img = cv2.erode(img, KERNEL_2_2, iterations=4)
         # imshow("PostIt dilate", img)
-        imshow("PostIt erode", img)
+        img = cv2.erode(img, KERNEL_2_2, iterations=4)
+        # imshow("PostIt erode 2", img)
 
         # Canny edge detection
-        edges = 30
-        threashold1 = 90
-        threashold2 = 3
-        canny = cv2.Canny(img, edges, threashold1, threashold2)
+        img = cv2.Canny(img, 30, 90, 3)
 
-        contours, _ = cv2.findContours(canny, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        contours, _ = cv2.findContours(img, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
         # imshow("Counturs" , canny )
 
         postIt = Region(0, 0, 0)
         for contour in contours:
-            # peri = cv2.arcLength(contour, True)
-            # area = cv2.contourArea(contour)
             [x, y, w, h] = cv2.boundingRect(contour)
-            area = w * h
-            if area > 100:  # Also a guess, should be tweaked
-                print(area)
-
-                if area > postIt.area:
-                    cv2.rectangle(outImg, (x, y), (x + w, y + h), POST_IT_RECTANGLE)
-                    postIt = Region(x + w / 2, y + h / 2, area)
+            approx = cv2.approxPolyDP(
+                contour, 0.001 * cv2.arcLength(contour, True), True
+            )
+            area = cv2.contourArea(contour)
+            if area < 100:
+                continue
+            putText(
+                outImg,
+                f"{len(approx)} ; {area}",
+                x,
+                y,
+                (0, 0, 255),
+            )
+            if area > postIt.area:
+                cv2.rectangle(outImg, (x, y), (x + w, y + h), POST_IT_RECTANGLE)
+                postIt = Region(x + w / 2, y + h / 2, area)
 
         if postIt.area == 0:
             return None
@@ -358,17 +375,9 @@ class StateMachine:
 
         cones: list[Region] = []
         for c in contours:
-            approx = cv2.approxPolyDP(c, 0.0001 * cv2.arcLength(c, True), True)
+            approx = cv2.approxPolyDP(c, 0.001 * cv2.arcLength(c, True), True)
             area = cv2.contourArea(c)
             [x, y, w, h] = cv2.boundingRect(c)
-            # cv2.putText(
-            #     outImg,
-            #     f"{len(approx)} ; {area}",
-            #     (int(x), int(y)),
-            #     cv2.FONT_HERSHEY_COMPLEX,
-            #     0.5,
-            #     (0, 0, 255),
-            # )
             if (
                 w > h * 1.2
                 or h > w * 2
@@ -377,6 +386,14 @@ class StateMachine:
                 or area > CONE_MAX_AREA
             ):
                 continue
+
+            putText(
+                outImg,
+                f"{len(approx)} ; {area}",
+                x,
+                y,
+                (0, 0, 255),
+            )
             [x, y, w, h] = cv2.boundingRect(c)
             cones.append(Region(x + w / 2, y + h / 2, area))
             cv2.rectangle(outImg, (x, y), (x + w, y + h), rectColor)
@@ -435,46 +452,43 @@ class StateMachine:
         self.sendSteerRequest(angle)
         pedal = self.targetToPedal(angle)
 
-        # print(f"Distance front: {self.distFront}")
-
         # Check that the car is not blocked.
-        # Only checks with the net if necessary
-        if self.distFront > 0 and self.distFront < STOP_DISTANCE_FRONT:
+        if self.distFront < STOP_DISTANCE_FRONT:
             pedal = 0
-        else:
+        elif self.distFront < FULL_DISTANCE_FRONT:
             # Limit speed if front distance too short
-            if self.distFront > 0 and self.distFront < FULL_DISTANCE_FRONT:
+            pedal = MIN_PEDAL_POSITION
+        elif enable_net:
+            # Check with YOLO
+            prediction = self.getKiwiPredictions(bgrImg, outImg)
+            if len(prediction) > 0:
+                # Limit speed if car found
                 pedal = MIN_PEDAL_POSITION
-            if enable_net:
-                # Check net
-                prediction = self.getKiwiPredictions(bgrImg, outImg)
-                if len(prediction) > 0:
-                    # print(prediction[0].x1)
-                    # Limit speed if car found
-                    pedal = MIN_PEDAL_POSITION
+
         self.sendPedalRequest(pedal)
-        pedalY = (
-            -(pedal - MIN_PEDAL_POSITION)
-            / (MAX_PEDAL_POSITION - MIN_PEDAL_POSITION)
-            * self.height
-            / 2
-            + self.height
-        )
-        cv2.circle(outImg, (goalScreen[0], int(pedalY)), 12, (255, 0, 0), -1)
+        if DEBUG:
+            # Map pedal to range [height/2, height]
+            pedalY = (
+                -(pedal - MIN_PEDAL_POSITION)
+                / (MAX_PEDAL_POSITION - MIN_PEDAL_POSITION)
+                * self.height
+                / 2
+                + self.height
+            )
+            cv2.circle(outImg, (goalScreen[0], int(pedalY)), 12, (255, 0, 0), -1)
 
     def handleState_LOOK_FOR_PAPER(self, hsvImg: np.ndarray, outImg: np.ndarray):
         if self.distFront < STOP_DISTANCE_FRONT:
-            self.currentState = State.GET_OUT_THEN_PAPER
-            return
+            self.reverseOut()
+
         paper = self.getPaperPosition(hsvImg, outImg)
         if paper == None:
-            # No paper found
-            # TODO: Drive in circle?
-            # TODO: Break if near wall
-            self.sendSteerRequest(-38)
+            # No postIt found
+            # Continues in previous direction unless wall in-front
+            if self.distFront < 0.5:
+                self.sendSteerRequest(-38)
             self.sendPedalRequest(MIN_PEDAL_POSITION)
         else:
-            # Found paper
             cv2.rectangle(
                 outImg,
                 (0, int(0.8 * self.height)),
@@ -483,7 +497,7 @@ class StateMachine:
                 2,
             )
             if paper.mid.y > 0.8 * self.height:
-                # Car is on paper
+                print("Parked on paper")
                 self.nextState()
                 self.sendSteerRequest(0)
                 self.sendPedalRequest(0)
@@ -493,26 +507,22 @@ class StateMachine:
             self.sendPedalRequest(MIN_PEDAL_POSITION)
 
     def handleState_LOOK_FOR_POSTIT(self, hsvImg: np.ndarray, outImg: np.ndarray):
-        # Need to look for paper. Right now looks after 1 min
+        print(f"Time since last on paper: {self.stateEntryTime // 1000}s")
         if self.stateEntryTime > 1 * 60 * 1000:
-            # Need to find paper
+            # Needs to find paper again.
+            print("Going back for blue paper")
             self.currentState = State.LOOK_FOR_PAPER
             return
 
         if self.distFront < STOP_DISTANCE_FRONT:
-            self.currentState = State.GET_OUT_THEN_POSTIT
-            return
+            self.reverseOut()
 
         postIt = self.getPostItPosition(hsvImg, outImg)
-        if postIt == None:
+        if not postIt:
             # No postIt found
-            # TODO: Drive in circle?
-            # TODO: Break if near wall
-            if self.distFront < 0.3:
+            # Continues in previous direction unless wall in-front
+            if self.distFront < 0.5:
                 self.sendSteerRequest(-38)
-            else:
-                angle = self.targetToAngle(self.prevTarget)
-                self.sendSteerRequest(angle)
             self.sendPedalRequest(MIN_PEDAL_POSITION)
         else:
             # Found postIt
@@ -525,13 +535,36 @@ class StateMachine:
                 2,
             )
             if postIt.mid.y > 0.8 * self.height:
+                print("Found PostIt!")
                 # Car is on postIt
                 self.currentState = State.WIGGLE_WHEELS_THEN_POSTIT
                 self.sendSteerRequest(0)
                 self.sendPedalRequest(0)
                 return
             goal = self.screenToWorld(postIt.mid.x, postIt.mid.y)
-            self.prevTarget = goal
             angle = self.targetToAngle(goal)
             self.sendSteerRequest(angle)
             self.sendPedalRequest(MIN_PEDAL_POSITION)
+
+    def reverseOut(self):
+        print("Trying to reverse")
+        print(f"Front distance {self.distFront}")
+        print(f"Rear distance {self.distRear}")
+        while self.distFront < 0.5:
+            if self.distFront < 0.2 and self.distRear < 0.2:
+                print("STUCK! PLEASE MOVE ME")
+                time.sleep(1)  # Limit stdout
+
+            # Blocked front. Try to reverse
+            if self.distFront < 0.2:
+                self.sendSteerRequest(-38)
+                self.sendPedalRequest(-0.5)
+            else:
+                # Blocked back. Drive forwards
+                self.sendSteerRequest(38)
+                self.sendPedalRequest(MIN_PEDAL_POSITION)
+            time.sleep(0.05)  # TODO: Match with frequency of distance sensor
+
+        self.sendSteerRequest(0)
+        self.sendPedalRequest(0)
+        print("Done!\n")

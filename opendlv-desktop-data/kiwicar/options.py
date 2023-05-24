@@ -18,21 +18,27 @@ class State(Enum):
     WIGGLE_WHEELS_THEN_POSTIT = 6
     WIGGLE_WHEELS_THEN_PAPER = 7
     DRIVE_BEHIND_CAR = 8
-    GET_OUT_THEN_PAPER = 9
-    GET_OUT_THEN_POSTIT = 10
 
 
 ################################################################################
 # Global options
 
-DEBUG = False
-MODE = Mode.RUNNING_ON_KIWI
+DEBUG = True
+MODE = Mode.REC_FROM_KIWI
 START_STATE = State.LOOK_FOR_PAPER
+
+# Number of ms to wiggle wheels
+WIGGLE_WHEELS_MILLIS = 4000
+# Turn wheels other way after xx ms
+WIGGLE_WHEELS_TURN = 700
+
+MIN_PEDAL_POSITION = 0.135
+MAX_PEDAL_POSITION = 0.16
 
 # Distance below this on front sensor will make the car stop
 STOP_DISTANCE_FRONT = 0.2  # m
 # Distance above this on front sensor will not limit the speed of the car
-FULL_DISTANCE_FRONT = 0.5  # m
+FULL_DISTANCE_FRONT = 0.7  # m
 
 ################################################################################
 # Constants
