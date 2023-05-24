@@ -24,8 +24,8 @@ class State(Enum):
 # Global options
 
 DEBUG = True
-MODE = Mode.REC_FROM_KIWI
-START_STATE = State.LOOK_FOR_PAPER
+MODE = Mode.RUNNING_ON_KIWI
+START_STATE = State.DEBUG_COLORS
 
 # Number of ms to wiggle wheels
 WIGGLE_WHEELS_MILLIS = 4000

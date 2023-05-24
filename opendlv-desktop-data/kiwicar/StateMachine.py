@@ -222,7 +222,7 @@ class StateMachine:
     def targetToAngle(self, target: Vec2) -> float:
         """
         Returns angle to target.
-        Target.y should be in [-1, 1]
+        target.y should be in [-1, 1]
 
         a----b
         |   /
@@ -231,9 +231,13 @@ class StateMachine:
         |/
         c
         """
-        ab = target.y
-        ac = 1.28  # Angle is 38 when y=1
-        return np.arctan(ab / ac)
+        # Useless. Pretty much linear without target.x
+        # https://www.wolframalpha.com/input?i=plot+arctan%28x%2F1.28%29+*+180+%2F+pi+from+-1+to+1
+        # ab = target.y
+        # ac = 1.28  # Angle is 38 when y=1
+        # rad = np.arctan(ab / ac)
+        # deg = rad * 180 / np.pi
+        return target.y * 38
 
     def targetToPedal(self, steerAngle: float) -> float:
         """
