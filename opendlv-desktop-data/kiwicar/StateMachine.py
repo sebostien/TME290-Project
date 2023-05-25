@@ -98,20 +98,16 @@ class StateMachine:
             case State.NOTHING | State.BETWEEN_CONES | State.BETWEEN_CONES_WITH_CARS | State.DEBUG_COLORS | State.DRIVE_BEHIND_CAR:
                 return
             case State.LOOK_FOR_PAPER:
-                self.currentState = State.WIGGLE_WHEELS_THEN_POSTIT
-                return
-            case State.LOOK_FOR_POSTIT:
-                self.currentState = State.WIGGLE_WHEELS_THEN_PAPER
-                return
-            case State.WIGGLE_WHEELS_THEN_POSTIT:
                 self.currentState = State.LOOK_FOR_POSTIT
                 return
-            case State.WIGGLE_WHEELS_THEN_PAPER:
+            case State.LOOK_FOR_POSTIT:
                 self.currentState = State.LOOK_FOR_PAPER
                 return
+        print("Error: nextState unhandled case: ", self.currentState)
+        exit(1)
 
     def runState(self, bgrImg: np.ndarray):
-        print(self.currentState)
+        # print(self.currentState)
         # For new training images
         # millis = lambda: round(time.time() * 1000)
         # cv2.imwrite(f"./images/{millis()}.jpg", bgrImg)
@@ -138,20 +134,12 @@ class StateMachine:
                 self.handleState_LOOK_FOR_PAPER(hsvImg, outImg)
             case State.LOOK_FOR_POSTIT:
                 self.handleState_LOOK_FOR_POSTIT(hsvImg, outImg)
-            case State.WIGGLE_WHEELS_THEN_PAPER | State.WIGGLE_WHEELS_THEN_POSTIT:
-                self.sendPedalRequest(0)
-                if self.stateEntryTime > WIGGLE_WHEELS_MILLIS:
-                    self.nextState()
-                    self.sendSteerRequest(0)
-                    return
-                self.sendSteerRequest(
-                    20 if self.stateEntryTime // WIGGLE_WHEELS_TURN % 2 == 0 else -20
-                )
             case State.DRIVE_BEHIND_CAR:
                 prediction = self.getKiwiPredictions(bgrImg, outImg)
                 if len(prediction) > 0:
                     # Found car
                     cx = (prediction[0].x1 + prediction[0].x2) // 2
+                    cv2.circle(outImg, (cx, OPTIONS.height // 2), 4, (255, 0, 0), 4)
                     world = self.screenToWorld(cx, 0)
                     angle = self.targetToAngle(world)
                     self.sendSteerRequest(angle)
@@ -163,10 +151,11 @@ class StateMachine:
                         print("Following car")
                         self.sendPedalRequest(MIN_PEDAL_POSITION)
                 else:
-                    # Look for a car
+                    # No car but something in-front
                     if self.distFront < STOP_DISTANCE_FRONT:
                         self.reverseOut()
 
+                    # Look for a car
                     print("Looking for car")
                     self.sendPedalRequest(MIN_PEDAL_POSITION)
                     if self.distFront < 0.5:
@@ -179,6 +168,7 @@ class StateMachine:
 
     # steerDegrees [-38, 38]
     def sendSteerRequest(self, steerDegrees: float):
+        print("Angle: ", steerDegrees)
         if MODE != Mode.RUNNING_ON_KIWI:
             return
 
@@ -501,22 +491,27 @@ class StateMachine:
                 2,
             )
             if paper.mid.y > 0.8 * self.height:
-                print("Parked on paper")
+                print("Parked on paper!")
+                self.wiggle_wheels()
                 self.nextState()
-                self.sendSteerRequest(0)
-                self.sendPedalRequest(0)
             goal = self.screenToWorld(paper.mid.x, paper.mid.y)
             angle = self.targetToAngle(goal)
             self.sendSteerRequest(angle)
             self.sendPedalRequest(MIN_PEDAL_POSITION)
 
     def handleState_LOOK_FOR_POSTIT(self, hsvImg: np.ndarray, outImg: np.ndarray):
-        print(f"Time since last on paper: {self.stateEntryTime // 1000}s")
         if self.stateEntryTime > 1 * 60 * 1000:
             # Needs to find paper again.
-            print("Going back for blue paper")
-            self.currentState = State.LOOK_FOR_PAPER
+            print("Time is up! Going back for blue paper!")
+            self.nextState()
             return
+
+        # Don't spam stdout
+        if (
+            self.stateEntryTime // 100 % 10 <= 1
+            and self.stateEntryTime // 1000 % 5 == 0
+        ):
+            print(f"Time since last on paper: {self.stateEntryTime // 1000}s")
 
         if self.distFront < STOP_DISTANCE_FRONT:
             self.reverseOut()
@@ -539,11 +534,9 @@ class StateMachine:
                 2,
             )
             if postIt.mid.y > 0.8 * self.height:
-                print("Found PostIt!")
+                print("Parked on PostIt!")
                 # Car is on postIt
-                self.currentState = State.WIGGLE_WHEELS_THEN_POSTIT
-                self.sendSteerRequest(0)
-                self.sendPedalRequest(0)
+                self.wiggle_wheels()
                 return
             goal = self.screenToWorld(postIt.mid.x, postIt.mid.y)
             angle = self.targetToAngle(goal)
@@ -558,17 +551,30 @@ class StateMachine:
             if self.distFront < 0.2 and self.distRear < 0.2:
                 print("STUCK! PLEASE MOVE ME")
                 time.sleep(1)  # Limit stdout
+                continue
 
-            # Blocked front. Try to reverse
             if self.distFront < 0.2:
+                # Blocked front. Try to reverse
                 self.sendSteerRequest(-38)
                 self.sendPedalRequest(-0.5)
             else:
                 # Blocked back. Drive forwards
                 self.sendSteerRequest(38)
                 self.sendPedalRequest(MIN_PEDAL_POSITION)
-            time.sleep(0.05)  # TODO: Match with frequency of distance sensor
+            time.sleep(0.04)
 
         self.sendSteerRequest(0)
         self.sendPedalRequest(0)
         print("Done!\n")
+
+    def wiggle_wheels(self):
+        print("Wiggle Wheels!")
+        self.sendPedalRequest(0)
+        t = 0
+        i = 0
+        while t < WIGGLE_WHEELS_MILLIS:
+            self.sendSteerRequest(-20 if i % 2 == 0 else 20)
+            i += 1
+            t += WIGGLE_WHEELS_TURN
+            time.sleep(WIGGLE_WHEELS_TURN / 1000)
+        print("Done!")

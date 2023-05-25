@@ -15,17 +15,15 @@ class State(Enum):
     BETWEEN_CONES_WITH_CARS = 3
     LOOK_FOR_PAPER = 4
     LOOK_FOR_POSTIT = 5
-    WIGGLE_WHEELS_THEN_POSTIT = 6
-    WIGGLE_WHEELS_THEN_PAPER = 7
-    DRIVE_BEHIND_CAR = 8
+    DRIVE_BEHIND_CAR = 6
 
 
 ################################################################################
 # Global options
 
 DEBUG = True
-MODE = Mode.RUNNING_ON_KIWI
-START_STATE = State.DEBUG_COLORS
+MODE = Mode.REC_FROM_KIWI
+START_STATE = State.LOOK_FOR_PAPER
 
 # Number of ms to wiggle wheels
 WIGGLE_WHEELS_MILLIS = 4000
