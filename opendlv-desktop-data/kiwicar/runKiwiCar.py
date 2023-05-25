@@ -41,9 +41,6 @@ START_TIME = millis()
 # Create a session to send and receive messages from a running OD4Session;
 session = OD4Session.OD4Session(cid=OPTIONS.cid)
 
-# Our state machine
-stateMachine = StateMachine(START_STATE, session)
-
 # Register a handler for a message; the following example is listening
 # for messageID 1039 which represents opendlv.proxy.DistanceReading.
 # Cf. here: https://github.com/chalmers-revere/opendlv.standard-message-set/blob/master/opendlv.odvd#L113-L115
@@ -58,6 +55,16 @@ session.registerMessageCallback(
 # Connect to the network session.
 session.connect()
 
+# Our state machine
+stateMachine = StateMachine(START_STATE, session)
+
+# TESTING Steering
+groundSteeringRequest = (
+    opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
+)
+steerRad = 38 / 180 * np.pi
+groundSteeringRequest.groundSteering = steerRad
+session.send(1090, groundSteeringRequest.SerializeToString())
 
 ################################################################################
 # The following lines connect to the camera frame that resides in shared memory.

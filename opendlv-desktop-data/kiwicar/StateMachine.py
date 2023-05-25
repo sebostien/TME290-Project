@@ -168,9 +168,10 @@ class StateMachine:
 
     # steerDegrees [-38, 38]
     def sendSteerRequest(self, steerDegrees: float):
-        print("Angle: ", steerDegrees)
         if MODE != Mode.RUNNING_ON_KIWI:
             return
+
+        # print("Angle: ", steerDegrees)
 
         groundSteeringRequest = (
             opendlv_standard_message_set_v0_9_10_pb2.opendlv_proxy_GroundSteeringRequest()
@@ -548,12 +549,15 @@ class StateMachine:
         print(f"Front distance {self.distFront}")
         print(f"Rear distance {self.distRear}")
         while self.distFront < 0.5:
-            if self.distFront < 0.2 and self.distRear < 0.2:
+            if (
+                self.distFront < STOP_DISTANCE_FRONT
+                and self.distRear < STOP_DISTANCE_FRONT
+            ):
                 print("STUCK! PLEASE MOVE ME")
                 time.sleep(1)  # Limit stdout
                 continue
 
-            if self.distFront < 0.2:
+            if self.distFront < STOP_DISTANCE_FRONT:
                 # Blocked front. Try to reverse
                 self.sendSteerRequest(-38)
                 self.sendPedalRequest(-0.5)
