@@ -493,6 +493,9 @@ class StateMachine:
             )
             if paper.mid.y > 0.8 * self.height:
                 print("Parked on paper!")
+                self.sendPedalRequest(MIN_PEDAL_POSITION)
+                time.sleep(0.1) # TODO: Adjust time
+                self.sendPedalRequest(0)
                 self.wiggle_wheels()
                 self.nextState()
             goal = self.screenToWorld(paper.mid.x, paper.mid.y)
@@ -536,6 +539,9 @@ class StateMachine:
             )
             if postIt.mid.y > 0.8 * self.height:
                 print("Parked on PostIt!")
+                self.sendPedalRequest(MIN_PEDAL_POSITION)
+                time.sleep(0.2) # TODO: Adjust time
+                self.sendPedalRequest(0)
                 # Car is on postIt
                 self.wiggle_wheels()
                 return
