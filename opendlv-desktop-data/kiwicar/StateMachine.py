@@ -124,8 +124,8 @@ class StateMachine:
                 print(f"Max cone area: {CONE_MAX_AREA}")
                 self.getBlueCones(hsvImg, outImg)
                 self.getYellowCones(hsvImg, outImg)
-                self.getPaperPosition(hsvImg, outImg)
-                self.getPostItPosition(hsvImg, outImg)
+                # self.getPaperPosition(hsvImg, outImg)
+                # self.getPostItPosition(hsvImg, outImg)
             case State.BETWEEN_CONES_WITH_CARS:
                 self.handleState_BETWEEN_CONES(hsvImg, bgrImg, outImg, enable_net=True)
             case State.BETWEEN_CONES:
@@ -348,12 +348,12 @@ class StateMachine:
 
     def getBlueCones(self, img: np.ndarray, outImg: np.ndarray) -> list[Region]:
         blueColors = cv2.inRange(img, OPTIONS.blueConeLow, OPTIONS.blueConeHigh)
-        # imshow("Blue cones", img)
+        imshow("Blue cones", img)
         return self.getConePositions(blueColors, outImg, BLUE_CONES_RECTANGLE)
 
     def getYellowCones(self, img: np.ndarray, outImg: np.ndarray) -> list[Region]:
         yellowColors = cv2.inRange(img, OPTIONS.yellowConeLow, OPTIONS.yellowConeHigh)
-        # imshow("Yellow cones", img)
+        imshow("Yellow cones", img)
         return self.getConePositions(yellowColors, outImg, YELLOW_CONES_RECTANGLE)
 
     def getConePositions(
@@ -565,11 +565,11 @@ class StateMachine:
 
             if self.distFront < STOP_DISTANCE_FRONT:
                 # Blocked front. Try to reverse
-                self.sendSteerRequest(-38)
+                self.sendSteerRequest(38)
                 self.sendPedalRequest(-0.5)
             else:
                 # Blocked back. Drive forwards
-                self.sendSteerRequest(38)
+                self.sendSteerRequest(-38)
                 self.sendPedalRequest(MIN_PEDAL_POSITION)
             time.sleep(0.04)
 
@@ -582,8 +582,13 @@ class StateMachine:
         self.sendPedalRequest(0)
         t = 0
         i = 0
-        while t < WIGGLE_WHEELS_MILLIS:
-            self.sendSteerRequest(-20 if i % 2 == 0 else 20)
+        while i < 10:
+            if i % 2 == 0:
+                print("-20")
+                self.sendSteerRequest(-20)
+            else:
+                print("20")
+                self.sendSteerRequest(20)
             i += 1
             t += WIGGLE_WHEELS_TURN
             time.sleep(WIGGLE_WHEELS_TURN / 1000)
