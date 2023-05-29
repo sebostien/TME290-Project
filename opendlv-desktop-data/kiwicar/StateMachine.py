@@ -504,7 +504,7 @@ class StateMachine:
             self.sendPedalRequest(MIN_PEDAL_POSITION)
 
     def handleState_LOOK_FOR_POSTIT(self, hsvImg: np.ndarray, outImg: np.ndarray):
-        if self.stateEntryTime > 1 * 60 * 1000:
+        if self.stateEntryTime > 1.5 * 60 * 1000:
             # Needs to find paper again.
             print("Time is up! Going back for blue paper!")
             self.nextState()

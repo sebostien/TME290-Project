@@ -2,39 +2,25 @@
 
 ## Submission details
 
-The code for the kiwi-car is located in `./opendlv-desktop-data/kiwicar/`.
+The code for the kiwi-car is located in the [kiwicar](https://github.com/sebostien/TME290-Project/tree/main/opendlv-desktop-data/kiwicar) directory.
 
-The file `./opendlv-desktop-data/kiwicar/StateMachine.py` contains all logic for the behaviour of each task.
-The file `./opendlv-desktop-data/kiwicar/yolov3_tiny.py` contains code to run YOLOv3 detection.
-The file `./opendlv-desktop-data/kiwicar/` contains the setup code for camera and OD4Session.
+- [StateMachine.py](https://github.com/sebostien/TME290-Project/blob/main/opendlv-desktop-data/kiwicar/StateMachine.py)
+  Contains all logic for the behaviour of each task.
+- [options.py](https://github.com/sebostien/TME290-Project/blob/main/opendlv-desktop-data/kiwicar/options.py)
+  Contains options to easily switch between environments.
+- [yolov3_tiny.py](https://github.com/sebostien/TME290-Project/blob/main/opendlv-desktop-data/kiwicar/yolov3_tiny.py)
+  Contains code for setup and usage of the YOLOv3 detection model.
+- [runKiwiCar.py](https://github.com/sebostien/TME290-Project/blob/main/opendlv-desktop-data/kiwicar/runKiwiCar.py)
+  Setup code for OD4Session and camera usage. Mostly provided by the tutorial repository.
 
-## TODO
+Code for darknet training is located in the [darknet](https://github.com/sebostien/TME290-Project/tree/main/darknet) directory.
 
-- [ ] Other
-  - [x] Drive between cones.
-  - [ ] Recording in demo room to check colors.
-- [x] Task 1
-  - [x] Drive between cones.
-- [ ] Task 2
-  - [x] Drive between cones.
-  - [x] Stop with sensor.
-  - [x] Stop with YOLOv3
-  - [ ] Test with other cars
-- [ ] Task 3
-  - [x] Drive between cones
-  - [ ] Check for orange cones
-  - [ ] Images of kiwi-car side profile. Needed for training of YOLOv3
-  - [ ] Right-hand rule
-- [ ] Task 4
-  - [x] Park on blue paper
-  - [x] Park on PostIt.
-  - [x] Global position to find its way back to blue paper and to know
-        where it has already been.
-        (Skipped this, driving left-turns instead)
-- [ ] Task 5
-  - [ ] Images of kiwi-car side profile. Needed for training of YOLOv3
-        (Skipped, driving left-turns until rear of car found)
-  - [x] Follow behind car (should be easy once above is done)
+- [transform_images.py](https://github.com/sebostien/TME290-Project/blob/main/darknet/transform_images.py)
+  Code for transforming course provided images into darknet format.
+- [seperate_val_train.py](https://github.com/sebostien/TME290-Project/blob/main/darknet/seperate_val_train.py)
+  Code for generating lists of training and validate groups.
+- [kiwicarv3.cfg](https://github.com/sebostien/TME290-Project/blob/main/darknet/kiwicarv3.cfg)
+  Config for our YOLOv3-tiny model.
 
 ## Darknet YOLOv3-tiny
 
